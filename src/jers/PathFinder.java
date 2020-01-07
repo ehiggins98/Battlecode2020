@@ -1,25 +1,28 @@
 package jers;
 
 import battlecode.common.Direction;
+import battlecode.common.GameActionException;
 import battlecode.common.MapLocation;
 import battlecode.common.RobotController;
 
-import java.util.Comparator;
-import java.util.PriorityQueue;
+import java.util.HashMap;
+import java.util.HashSet;
 
 /**
- * This currently implements the A* algorithm. This is really bad, but it's fine for now.
+ * This is a really basic and bad algorithm and it really needs improvement.
+ * It greedily selects the next unvisited square that's closest to the goal, and moves there.
  */
 public class PathFinder {
     private RobotController rc;
     private MapLocation goal;
-    private PriorityQueue<PrioritizedMapLocation> queue;
+    private HashSet<MapLocation> visited;
+    private MapLocation current;
 
     public PathFinder(RobotController rc, MapLocation start, MapLocation goal) {
         this.rc = rc;
         this.goal = goal;
-        queue = new PriorityQueue<PrioritizedMapLocation>(16, new PrioritizedLocComparator());
-        queue.add(new PrioritizedMapLocation(start, 0, heuristicDistance(start, goal)));
+        this.current = start;
+        visited = new HashSet<MapLocation>();
     }
 
     /**
@@ -28,61 +31,34 @@ public class PathFinder {
      * @return A value indicating whether we can move. This will only be false if the goal is
      * unreachable.
      */
-    public boolean move() {
-        if (queue.isEmpty()) {
+    public boolean move() throws GameActionException {
+        MapLocation argmin = null;
+        Direction argminDir = null;
+        double min = Double.POSITIVE_INFINITY;
+
+        for (Direction d : RobotPlayer.directions) {
+            MapLocation newLoc = this.current.add(d);
+            if (rc.canMove(d) && !visited.contains(newLoc)) {
+                double dist;
+                if ((dist = newLoc.distanceSquaredTo(goal)) < min) {
+                    min = dist;
+                    argmin = newLoc;
+                    argminDir = d;
+                }
+            }
+        }
+
+        if (argmin == null) {
             return false;
         }
 
-        PrioritizedMapLocation current = queue.poll();
-        for (Direction d : RobotPlayer.directions) {
-            if (rc.canMove(d)) {
-                MapLocation newLoc = current.getLocation().add(d)
-                queue.add(new PrioritizedMapLocation(newLoc, current.getPrecedingDist() + 1, heuristicDistance(newLoc, this.goal)));
-            }
-        }
+        visited.add(argmin);
+        current = argmin;
+        rc.move(argminDir);
+        return true;
     }
 
-    private double heuristicDistance(MapLocation current, MapLocation goal) {
-        return Math.sqrt(current.distanceSquaredTo(goal);
-    }
-
-    class PrioritizedMapLocation {
-        private MapLocation loc;
-        private int precedingDist;
-        private double heuristicDistRemaining;
-
-        public PrioritizedMapLocation(MapLocation loc, int precedingDist, double heuristicDistRemaining) {
-            this.loc = loc;
-            this.precedingDist = precedingDist;
-            this.heuristicDistRemaining = heuristicDistRemaining;
-        }
-
-        public MapLocation getLocation() {
-            return this.loc;
-        }
-
-        public int getPrecedingDist() {
-            return this.precedingDist;
-        }
-
-        public double getHeuristicDistRemaining() {
-            return this.heuristicDistRemaining;
-        }
-
-        public double getPriority() {
-            return this.precedingDist + this.heuristicDistRemaining;
-        }
-    }
-
-    class PrioritizedLocComparator implements Comparator<PrioritizedMapLocation> {
-        public int compare(PrioritizedMapLocation o1, PrioritizedMapLocation o2) {
-            if (o1.getPriority() < o2.getPriority()) {
-                return -1;
-            } else if (o1.getPriority() == o2.getPriority()) {
-                return 0;
-            } else {
-                return 1;
-            }
-        }
+    public boolean isFinished() {
+        return current.equals(goal);
     }
 }
