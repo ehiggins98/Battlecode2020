@@ -27,6 +27,8 @@ public class PathFinder {
         this.goal = goal;
     }
 
+    public MapLocation getGoal() { return this.goal; }
+
     /**
      * Move to the next square on the path
      *
