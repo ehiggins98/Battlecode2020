@@ -45,7 +45,7 @@ public class PathFinder {
 
         for (Direction d : Constants.directions) {
             MapLocation newLoc = this.rc.getLocation().add(d);
-            if (rc.canMove(d) && !visited.contains(newLoc)) {
+            if (rc.canMove(d) && !visited.contains(newLoc) && !isFlooded(d)) {
                 double dist;
                 if ((dist = newLoc.distanceSquaredTo(goal)) < min) {
                     min = dist;
@@ -66,5 +66,9 @@ public class PathFinder {
 
     public boolean isFinished() {
         return this.rc.getLocation().equals(goal);
+    }
+
+    private boolean isFlooded(Direction d) throws GameActionException {
+        return rc.senseFlooding(rc.adjacentLocation(d));
     }
 }
