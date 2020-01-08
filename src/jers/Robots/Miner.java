@@ -8,6 +8,7 @@ import jers.PathFinder;
 import jers.Transactor;
 
 import java.util.ArrayList;
+import java.util.Random;
 
 import static jers.Constants.directions;
 
@@ -15,10 +16,12 @@ enum Goal {IDLE, MINE, REFINE, EXPLORE;}
 
 public class Miner extends Robot {
     private final int MIN_SOUP_FOR_TRANSACTION = 2 * RobotType.MINER.soupLimit;
+    private final int MAX_EXPLORE_DELTA = 10;
 
     private PathFinder pathFinder;
     private Transactor transactor;
     private MapLocation refineryLocation = null;
+    private MapLocation soupLocation = null;
     boolean refineryTransactionNeeded = false;
     private Goal goal = Goal.IDLE;
 
@@ -34,7 +37,6 @@ public class Miner extends Robot {
             }
 
             pathFinder.setGoal(localSoup);
-            System.out.println("Goal set.");
             goal = Goal.MINE;
         }
     }
@@ -55,61 +57,92 @@ public class Miner extends Robot {
                 refineryTransactionNeeded = true;
             }
         }
-        if (!pathFinder.isFinished()) {
-            System.out.println("At " + rc.getLocation() + " with " + rc.senseSoup(rc.getLocation()) + " soup");
-            boolean success = pathFinder.move();
-            System.out.println("Moved to " + rc.getLocation());
-            System.out.println(success);
 
-            if (!success || goal == Goal.IDLE) {
-                MapLocation farSoup = findFarSoup();
-                if (farSoup != null) {
-                    if (rc.senseSoup(farSoup) > MIN_SOUP_FOR_TRANSACTION) {
-                        //Send a transaction to tell other miners to come here
-                    }
-                    pathFinder.setGoal(farSoup);
-                    goal = Goal.MINE;
-                }
-            }
-            if (goal == Goal.MINE) {
-                MapLocation goal_loc = pathFinder.getGoal();
-                if ((rc.senseSoup(goal_loc) == 0) ||
-                        (rc.isLocationOccupied(goal_loc) && !rc.getLocation().equals(goal_loc))) {
-                    MapLocation loc = findLocalSoup();
-                    if (loc != null) {
-                        pathFinder.setGoal(loc);
-                    }
-                }
-            }
+        if (!rc.isReady()) {
+            return;
         }
-        else if (rc.isReady()) {
-            if (goal == Goal.MINE) {
-                if (rc.getSoupCarrying() < RobotType.MINER.soupLimit) {
-                    if (rc.senseSoup(pathFinder.getGoal()) == 0) {
-                        MapLocation loc = findLocalSoup();
-                        if (loc != null) {
-                            pathFinder.setGoal(loc);
-                        }
-                        else {
-                            goal = Goal.IDLE;
-                        }
-                    }
-                    else if (rc.senseSoup(rc.getLocation()) > 0) {
-                        rc.mineSoup(Direction.CENTER);
-                    }
-                }
-                else if (refineryLocation != null) {
-                    pathFinder.setGoal(refineryLocation.add(Direction.SOUTH));
-                    goal = Goal.REFINE;
-                }
-            }
 
-            if (goal == Goal.REFINE) {
-                // Dumb solution but since we're always below refinery at finish we just deposit upwards
-                rc.depositSoup(Direction.NORTH, rc.getSoupCarrying());
-                goal = Goal.MINE;
-            }
+        switch (goal) {
+            case IDLE:
+                findSoup();
+                break;
+            case MINE:
+                mine();
+                break;
+            case REFINE:
+                refine();
+                break;
+            case EXPLORE:
+                explore();
+                break;
         }
+    }
+
+    private void findSoup() throws GameActionException {
+        MapLocation localSoup = findLocalSoup();
+        MapLocation farSoup = findFarSoup();
+        if (soupLocation != null) {
+            pathFinder.setGoal(soupLocation);
+            goal = goal.MINE;
+        }
+        else if (localSoup != null) {
+            pathFinder.setGoal(localSoup);
+            goal = Goal.MINE;
+        }
+        else if (farSoup != null) {
+            pathFinder.setGoal(farSoup);
+            goal = Goal.MINE;
+        } else {
+            goal = Goal.EXPLORE;
+        }
+    }
+
+    private void mine() throws GameActionException {
+        boolean success = pathFinder.move();
+
+        MapLocation goalLoc = pathFinder.getGoal();
+        if (!success || (rc.canSenseLocation(goalLoc) && rc.senseSoup(goalLoc) == 0)) {
+            goal = Goal.IDLE;
+        }
+
+        if (rc.senseSoup(rc.getLocation()) > 0 && rc.canMineSoup(Direction.CENTER)) {
+            rc.mineSoup(Direction.CENTER);
+        }
+
+        if (rc.getSoupCarrying() >= RobotType.MINER.soupLimit && refineryLocation != null) {
+            goal = Goal.REFINE;
+            pathFinder.setGoal(refineryLocation.subtract(rc.getLocation().directionTo(refineryLocation)));
+        }
+    }
+
+    private void refine() throws GameActionException {
+        boolean success = pathFinder.move();
+        if (!success) {
+            goal = Goal.IDLE;
+        }
+
+        Direction dirToRefinery = rc.getLocation().directionTo(refineryLocation);
+        if (rc.canDepositSoup(dirToRefinery) && rc.isReady()) {
+            rc.depositSoup(dirToRefinery, rc.getSoupCarrying());
+            goal = Goal.IDLE;
+        }
+    }
+
+    private void explore() throws GameActionException {
+        boolean success = pathFinder.move();
+        if (!success || pathFinder.isFinished()) {
+            pathFinder.setGoal(getRandomGoal());
+        }
+
+        goal = Goal.IDLE;
+    }
+
+    private MapLocation getRandomGoal() {
+        Random random = new Random();
+        int dx = random.nextInt(MAX_EXPLORE_DELTA * 2 + 1) - MAX_EXPLORE_DELTA;
+        int dy = random.nextInt(MAX_EXPLORE_DELTA * 2 + 1) - MAX_EXPLORE_DELTA;
+        MapLocation currentLoc = rc.getLocation();
+        return new MapLocation(currentLoc.x + dx, currentLoc.y + dy);
     }
 
     private MapLocation makeRefinery() throws GameActionException {
@@ -183,16 +216,15 @@ public class Miner extends Robot {
                 new int[]{loc.x-5, loc.y+2},
                 new int[]{loc.x-5, loc.y+3}};
 
-        System.out.println("My coords are " + loc.x + " " + loc.y);
         for (int[] coord: coords) {
             MapLocation newLoc = new MapLocation(coord[0], coord[1]);
             try {
-                if (rc.onTheMap(newLoc) && rc.senseSoup(newLoc) > 0) {
+                if (rc.canSenseLocation(newLoc) && rc.onTheMap(newLoc) && rc.senseSoup(newLoc) > 0 && !rc.isLocationOccupied(newLoc) && !rc.senseFlooding(newLoc)) {
                     return newLoc;
                 }
             }
             catch (GameActionException e) {
-                System.out.println("Not valid coords: " + coord[0] + " " + coord[1]);
+                //System.out.println("Not valid coords: " + coord[0] + " " + coord[1]);
             }
         }
 
@@ -213,9 +245,9 @@ public class Miner extends Robot {
                 if (x == loc.x-4 && y == loc.y-4 || x == loc.x-4 && y == loc.y+4 || x == loc.x+4 && y == loc.y-4 || x == loc.x+4 && y == loc.y+4) {
                     continue;
                 }
-                MapLocation new_loc = new MapLocation(x, y);
-                if (rc.onTheMap(new_loc) && rc.senseSoup(new_loc) > 0 && !rc.isLocationOccupied(new_loc)) {
-                    return new_loc;
+                MapLocation newLoc = new MapLocation(x, y);
+                if (rc.canSenseLocation(newLoc) && rc.onTheMap(newLoc) && rc.senseSoup(newLoc) > 0 && !rc.isLocationOccupied(newLoc) && !rc.senseFlooding(newLoc)) {
+                    return newLoc;
                 }
             }
         }

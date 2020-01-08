@@ -39,18 +39,15 @@ public class PathFinder {
     /**
      * Move to the next square on the path
      *
-     * @return A value indicating whether we can move. This will be false if we have reached the
-     * goal or if the goal is unreachable.
+     * @return A value indicating whether we can move. This will be false only if the goal is unreachable.
      */
     public boolean move() throws GameActionException {
         steps += 1;
-        if (this.rc.getLocation().equals(this.goal)) {
-            System.out.println("Here1");
-            return false;
-        } else if (steps > MAX_STEPS_PER_GOAL) {
+        if (this.goal == null || steps > MAX_STEPS_PER_GOAL) {
             failed = true;
-            System.out.println("Here2");
             return false;
+        } else if (this.rc.getLocation().equals(this.goal)) {
+            return true;
         }
 
         MapLocation argmin = null;
@@ -68,14 +65,12 @@ public class PathFinder {
                 }
             } else if (newLoc.equals(goal)) {
                 failed = true;
-                System.out.println("Here2");
                 return false;
             }
         }
 
         if (argmin == null) {
             failed = true;
-            System.out.println("Here3");
             return false;
         }
 
