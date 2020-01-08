@@ -1,6 +1,7 @@
 package jers.Robots;
 
 import battlecode.common.*;
+import jers.Goal;
 import jers.Messages.Message;
 import jers.Messages.MessageType;
 import jers.Messages.RefineryBuiltMessage;
@@ -11,8 +12,6 @@ import java.util.ArrayList;
 import java.util.Random;
 
 import static jers.Constants.directions;
-
-enum Goal {IDLE, MINE, REFINE, EXPLORE;}
 
 public class Miner extends Robot {
     private final int MIN_SOUP_FOR_TRANSACTION = 2 * RobotType.MINER.soupLimit;
@@ -42,12 +41,13 @@ public class Miner extends Robot {
     }
 
     @Override
-    public void run(int roundNum) throws GameActionException {
+    public void run(int roundNum) throws GameActionException, IllegalStateException {
         if (refineryLocation == null && roundNum > 59) {
             refineryLocation = findRefineryLocation(roundNum);
         }
         if (refineryTransactionNeeded) {
-            refineryTransactionNeeded = !transactor.submitTransaction(new RefineryBuiltMessage(refineryLocation));
+            refineryTransactionNeeded = !transactor.submitTransaction(new RefineryBuiltMessage(new RobotType[]{RobotType.MINER}, Goal.ALL, refineryLocation));
+            System.out.println("Transaction submitted? " + !refineryTransactionNeeded);
         }
 
         if (refineryLocation == null) {
@@ -75,6 +75,8 @@ public class Miner extends Robot {
             case EXPLORE:
                 explore();
                 break;
+            default:
+                throw new IllegalStateException("Invalid goal " + goal);
         }
     }
 
@@ -160,8 +162,8 @@ public class Miner extends Robot {
     private MapLocation findRefineryLocation(int roundNum) throws GameActionException {
         // Searching a round costs 100 bytecode, so we'll limit to 50 rounds to
         // be safe.
-        for (int round = 59; round < Math.min(109, roundNum); round++) {
-            ArrayList<Message> messages = transactor.getBlock(round);
+        for (int round = 69; round < Math.min(119, roundNum); round++) {
+            ArrayList<Message> messages = transactor.getBlock(round, this.goal);
             for (Message m : messages) {
                 if (m.getMessageType() == MessageType.REFINERY_BUILT) {
                     return ((RefineryBuiltMessage) m).getRefineryLocation();
