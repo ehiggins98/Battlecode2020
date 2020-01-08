@@ -32,9 +32,9 @@ public class Transactor {
         return false;
     }
 
-    public ArrayList<Message> getBlock(int roundNum) throws GameActionException {
+    public ArrayList<Message> getBlock(int roundNum, Goal currentGoal) throws GameActionException {
         Transaction[] transactions = rc.getBlock(roundNum);
-        return deserializeBlock(transactions, roundNum);
+        return deserializeBlock(transactions, roundNum, currentGoal);
     }
 
     /**
@@ -44,11 +44,11 @@ public class Transactor {
      * @param fromRound The round on which the block was sent.
      * @return An array of relevant messages from the block.
      */
-    private ArrayList<Message> deserializeBlock(Transaction[] transactions, int fromRound) {
+    private ArrayList<Message> deserializeBlock(Transaction[] transactions, int fromRound, Goal currentGoal) {
         ArrayList<Message> messages = new ArrayList<Message>(transactions.length);
 
         for (Transaction t : transactions) {
-            if (Message.transactionIsForMe(t, fromRound)) {
+            if (Message.isForMe(t.getMessage(), rc.getType(), currentGoal, fromRound)) {
                 if (t.getMessage()[2] == MessageType.REFINERY_BUILT.getId()) {
                     messages.add(new RefineryBuiltMessage(t.getMessage(), 3));
                 }

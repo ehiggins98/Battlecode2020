@@ -1,7 +1,10 @@
 package jers.Messages;
 
 import battlecode.common.GameConstants;
+import battlecode.common.RobotType;
 import battlecode.common.Transaction;
+import jers.Constants;
+import jers.Goal;
 
 public abstract class Message {
     /**
@@ -19,8 +22,21 @@ public abstract class Message {
      */
     abstract int[] getParams();
 
-    private static final int FIRST_VALUE = 94875;
-    private static final int SECOND_VALUE_MODULUS = 31;
+    /**
+     * Get the robot types that should pay attention to this message.
+     * @return The robot types that should pay attention to this message.
+     */
+    abstract RobotType[] getRecipients();
+
+    /**
+     * Robots with the given goal should pay attention to the message.
+     * @return The goal for which robots should pay attention to the message.
+     */
+    abstract Goal getRecipientGoal();
+
+    private static final int SECRET_VALUE = 81076;
+    private static final int MODULUS = 31;
+    private static final int RECIPIENT_SPEC_LENGTH = 16;
 
     /**
      * Serializes the message for sending with 94875, roundNum % 31, and the message type ID.
@@ -39,12 +55,12 @@ public abstract class Message {
         }
 
         int[] data = new int[3 + getParams().length];
-        data[0] = FIRST_VALUE;
-        data[1] = roundNum % SECOND_VALUE_MODULUS;
+        data[0] = makeSigningValue(roundNum);
+        data[1] = makeTargetValue(getRecipients(), getRecipientGoal());
         data[2] = getMessageType().getId();
 
         for (int i = 0; i < getParams().length; i++) {
-            data[i+3] = getParams()[i];
+            data[i + 3] = getParams()[i];
         }
 
         return data;
@@ -52,12 +68,63 @@ public abstract class Message {
 
     /**
      * Checks if the given transaction was sent by us.
-     * @param transaction The transaction to check.
+     * @param msg The message to check.
      * @param sentOnRound The round the transaction was sent on.
      * @return A value indicating whether the current transaction was sent by us.
      */
-    public static boolean transactionIsForMe(Transaction transaction, int sentOnRound) {
-        int[] msg = transaction.getMessage();
-        return msg.length >= 3 && msg[0] == FIRST_VALUE && msg[1] == sentOnRound % SECOND_VALUE_MODULUS;
+    public static boolean isForMe(int[] msg, RobotType type, Goal goal, int sentOnRound) {
+        if (msg.length < 3) {
+            return false;
+        }
+
+        if (!checkSigningValue(sentOnRound, msg[0])) {
+            System.out.println("here");
+            return false;
+        }
+
+        return checkTargetValue(msg[1], type, goal);
+    }
+
+    private static int makeSigningValue(int roundNum) {
+        if (MODULUS > 32) {
+            throw new IllegalArgumentException("Modulus can be at most 32");
+        }
+
+        int hash = roundNum % MODULUS;
+        return (((((hash << 5) + hash) << 5) + hash) << 17) + SECRET_VALUE;
+    }
+
+    private static boolean checkSigningValue(int roundNum, int signingValue) {
+        int expected = makeSigningValue(roundNum);
+        return signingValue == expected;
+    }
+
+    private int makeTargetValue(RobotType[] recipients, Goal recipientGoals) {
+        int recipientSpec = getRecipientEncoding(recipients);
+        int goalSpec = recipientGoals.getId();
+
+        return (goalSpec << RECIPIENT_SPEC_LENGTH) + recipientSpec;
+    }
+
+    private static boolean checkTargetValue(int value, RobotType type, Goal goal) {
+        int robotTypeEncoding = Constants.robotTypes.indexOf(type);
+        if ((value >> robotTypeEncoding) % 2 == 0) {
+            return false;
+        }
+
+        int goalSpec = value >> RECIPIENT_SPEC_LENGTH;
+        return goalSpec == goal.getId() || goalSpec == Goal.ALL.getId();
+    }
+
+    private int getRecipientEncoding(RobotType[] types) {
+        int value = 0;
+
+        // This is a one-hot encoding, so a robot can check if it should pay
+        // attention to a given message in O(1) time.
+        for (RobotType type : types) {
+            value |= 1 << Constants.robotTypes.indexOf(type);
+        }
+
+        return value;
     }
 }
