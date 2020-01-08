@@ -36,6 +36,7 @@ public class Miner extends Robot {
                     //Send a transaction to tell other miners to come here
                 }
                 pathFinder.setGoal(localSoup);
+                System.out.println("Goal is mining");
                 goal = Goal.MINING;
             }
         }
@@ -71,6 +72,16 @@ public class Miner extends Robot {
                     }
                     pathFinder.setGoal(farSoup);
                     goal = Goal.MINING;
+                }
+            }
+            if (goal == Goal.MINING) {
+                MapLocation goal_loc = pathFinder.getGoal();
+                if ((rc.senseSoup(goal_loc) == 0) ||
+                        (rc.isLocationOccupied(goal_loc) && !rc.getLocation().equals(goal_loc))) {
+                    MapLocation loc = findLocalSoup();
+                    if (loc != null) {
+                        pathFinder.setGoal(loc);
+                    }
                 }
             }
         }
@@ -178,7 +189,7 @@ public class Miner extends Robot {
         for (int[] coord: coords) {
             MapLocation new_loc = new MapLocation(coord[0], coord[1]);
             try {
-                if (rc.onTheMap(new_loc) && rc.senseSoup(new_loc) > 0) {
+                if (rc.onTheMap(new_loc) && rc.senseSoup(new_loc) > 0 && !rc.isLocationOccupied(new_loc)) {
                     return new_loc;
                 }
             }
@@ -201,7 +212,7 @@ public class Miner extends Robot {
                     continue;
                 }
                 MapLocation new_loc = new MapLocation(x, y);
-                if (rc.onTheMap(new_loc) && rc.senseSoup(new_loc) > 0) {
+                if (rc.onTheMap(new_loc) && rc.senseSoup(new_loc) > 0 && !rc.isLocationOccupied(new_loc)) {
                     return new_loc;
                 }
             }
