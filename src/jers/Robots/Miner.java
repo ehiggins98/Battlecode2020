@@ -1,7 +1,6 @@
 package jers.Robots;
 
 import battlecode.common.*;
-import jers.Constants;
 import jers.Messages.Message;
 import jers.Messages.MessageType;
 import jers.Messages.RefineryBuiltMessage;
@@ -9,46 +8,40 @@ import jers.PathFinder;
 import jers.Transactor;
 
 import java.util.ArrayList;
-import java.util.Map;
 
 import static jers.Constants.directions;
 
-enum Goal {IDLE, MINING, REFINING;}
+enum Goal {IDLE, MINE, REFINE, EXPLORE;}
 
 public class Miner extends Robot {
+    private final int MIN_SOUP_FOR_TRANSACTION = 2 * RobotType.MINER.soupLimit;
+
     private PathFinder pathFinder;
     private Transactor transactor;
     private MapLocation refineryLocation = null;
     boolean refineryTransactionNeeded = false;
-    Goal goal = Goal.IDLE;
+    private Goal goal = Goal.IDLE;
 
-    public Miner(RobotController rc) {
+    public Miner(RobotController rc) throws GameActionException {
         super(rc);
 
         pathFinder = new PathFinder(rc);
-        pathFinder.setGoal(new MapLocation(0, 0));
         transactor = new Transactor(rc);
-
-        try {
-            MapLocation localSoup = findLocalSoup();
-            if (localSoup != null) {
-                if (rc.senseSoup(localSoup) > 2 * RobotType.MINER.soupLimit) {
-                    //Send a transaction to tell other miners to come here
-                }
-                pathFinder.setGoal(localSoup);
-                System.out.println("Goal is mining");
-                goal = Goal.MINING;
+        MapLocation localSoup = findLocalSoup();
+        if (localSoup != null) {
+            if (rc.senseSoup(localSoup) > MIN_SOUP_FOR_TRANSACTION) {
+                //Send a transaction to tell other miners to come here
             }
-        }
-        catch (GameActionException e) {
 
+            pathFinder.setGoal(localSoup);
+            System.out.println("Goal set.");
+            goal = Goal.MINE;
         }
-
     }
 
     @Override
     public void run(int roundNum) throws GameActionException {
-        if (refineryLocation == null && roundNum > 70) {
+        if (refineryLocation == null && roundNum > 59) {
             refineryLocation = findRefineryLocation(roundNum);
         }
         if (refineryTransactionNeeded) {
@@ -63,18 +56,22 @@ public class Miner extends Robot {
             }
         }
         if (!pathFinder.isFinished()) {
-            pathFinder.move();
-            if (goal == Goal.IDLE) {
+            System.out.println("At " + rc.getLocation() + " with " + rc.senseSoup(rc.getLocation()) + " soup");
+            boolean success = pathFinder.move();
+            System.out.println("Moved to " + rc.getLocation());
+            System.out.println(success);
+
+            if (!success || goal == Goal.IDLE) {
                 MapLocation farSoup = findFarSoup();
                 if (farSoup != null) {
-                    if (rc.senseSoup(farSoup) > 2 * RobotType.MINER.soupLimit) {
+                    if (rc.senseSoup(farSoup) > MIN_SOUP_FOR_TRANSACTION) {
                         //Send a transaction to tell other miners to come here
                     }
                     pathFinder.setGoal(farSoup);
-                    goal = Goal.MINING;
+                    goal = Goal.MINE;
                 }
             }
-            if (goal == Goal.MINING) {
+            if (goal == Goal.MINE) {
                 MapLocation goal_loc = pathFinder.getGoal();
                 if ((rc.senseSoup(goal_loc) == 0) ||
                         (rc.isLocationOccupied(goal_loc) && !rc.getLocation().equals(goal_loc))) {
@@ -85,45 +82,42 @@ public class Miner extends Robot {
                 }
             }
         }
-        else {
-            if (rc.isReady()) {
-                if (goal == Goal.MINING) {
-                    if (rc.getSoupCarrying() < RobotType.MINER.soupLimit) {
-                        if (rc.senseSoup(pathFinder.getGoal()) == 0) {
-                            MapLocation loc = findLocalSoup();
-                            if (loc != null) {
-                                pathFinder.setGoal(loc);
-                            }
-                            else {
-                                goal = Goal.IDLE;
-                            }
+        else if (rc.isReady()) {
+            if (goal == Goal.MINE) {
+                if (rc.getSoupCarrying() < RobotType.MINER.soupLimit) {
+                    if (rc.senseSoup(pathFinder.getGoal()) == 0) {
+                        MapLocation loc = findLocalSoup();
+                        if (loc != null) {
+                            pathFinder.setGoal(loc);
                         }
                         else {
-                            rc.mineSoup(Direction.CENTER);
+                            goal = Goal.IDLE;
                         }
                     }
-                    else {
-                        pathFinder.setGoal(refineryLocation.add(Direction.SOUTH));
-                        goal = Goal.REFINING;
+                    else if (rc.senseSoup(rc.getLocation()) > 0) {
+                        rc.mineSoup(Direction.CENTER);
                     }
                 }
-
-                if (goal == Goal.REFINING) {
-                    // Dumb solution but since we're always below refinery at finish we just deposit upwards
-                    rc.depositSoup(Direction.NORTH, 100);
-                    goal = Goal.MINING;
+                else if (refineryLocation != null) {
+                    pathFinder.setGoal(refineryLocation.add(Direction.SOUTH));
+                    goal = Goal.REFINE;
                 }
+            }
 
+            if (goal == Goal.REFINE) {
+                // Dumb solution but since we're always below refinery at finish we just deposit upwards
+                rc.depositSoup(Direction.NORTH, rc.getSoupCarrying());
+                goal = Goal.MINE;
             }
         }
     }
 
     private MapLocation makeRefinery() throws GameActionException {
         for (Direction d : directions) {
-            if (rc.canBuildRobot(RobotType.REFINERY, d)) {
-                MapLocation builtAt = rc.getLocation().add(d);
+            MapLocation buildAt = rc.getLocation().add(d);
+            if (rc.canBuildRobot(RobotType.REFINERY, d) && !rc.senseFlooding(buildAt) && rc.senseSoup(buildAt) == 0) {
                 rc.buildRobot(RobotType.REFINERY, d);
-                return builtAt;
+                return buildAt;
             }
         }
 
@@ -145,10 +139,14 @@ public class Miner extends Robot {
         return null;
     }
 
-    // Find first instance of soup on the outskirts of the range
-    // Use this after moving to determine if new soup has been discovered
-    // If new soup is found, send transaction detailing location of soup
-    // Locations are manually input so we don't have to check if within sensor range, just if on the map;
+    /**
+     * Find first instance of soup on the outskirts of the range
+     * Use this after moving to determine if new soup has been discovered
+     * If new soup is found, send transaction detailing location of soup
+     * Locations are manually input so we don't have to check if within sensor range, just if on the map;
+     * @return
+     * @throws GameActionException
+     */
     private MapLocation findFarSoup() throws GameActionException {
         MapLocation loc = rc.getLocation();
         int[][] coords = new int[][] {
@@ -187,10 +185,10 @@ public class Miner extends Robot {
 
         System.out.println("My coords are " + loc.x + " " + loc.y);
         for (int[] coord: coords) {
-            MapLocation new_loc = new MapLocation(coord[0], coord[1]);
+            MapLocation newLoc = new MapLocation(coord[0], coord[1]);
             try {
-                if (rc.onTheMap(new_loc) && rc.senseSoup(new_loc) > 0 && !rc.isLocationOccupied(new_loc)) {
-                    return new_loc;
+                if (rc.onTheMap(newLoc) && rc.senseSoup(newLoc) > 0) {
+                    return newLoc;
                 }
             }
             catch (GameActionException e) {
@@ -201,9 +199,13 @@ public class Miner extends Robot {
         return null;
     }
 
-    // Find first instance of soup on the inskirts of the range
-    // For MapLocations in x-4, y-4 to x+4, y+4 check if soup is present
-    // If so, send transaction detailing location of soup
+    /**
+     * Find first instance of soup in the range
+     * For MapLocations in x-4, y-4 to x+4, y+4 check if soup is present
+     * If so, send transaction detailing location of soup
+     * @return
+     * @throws GameActionException
+     */
     private MapLocation findLocalSoup() throws GameActionException {
         MapLocation loc = rc.getLocation();
         for (int x = loc.x-4; x <= loc.x+4; x++) {

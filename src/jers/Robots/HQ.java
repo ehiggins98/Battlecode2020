@@ -9,6 +9,8 @@ import static jers.Constants.directions;
 
 public class HQ extends Robot {
     static final int MIN_SOUP_FOR_MINER = 400;
+    static final int MIN_ROUNDS_BETWEEN_MINERS = 100;
+    private int lastMinerBuilt = 0;
 
     public HQ(RobotController rc) throws GameActionException {
         super(rc);
@@ -18,17 +20,21 @@ public class HQ extends Robot {
 
     @Override
     public void run(int roundNum) throws GameActionException {
-        if (rc.getTeamSoup() >= MIN_SOUP_FOR_MINER) {
-            makeMiner();
+        if (rc.getTeamSoup() >= MIN_SOUP_FOR_MINER && roundNum - lastMinerBuilt > MIN_ROUNDS_BETWEEN_MINERS) {
+            if(makeMiner()) {
+                lastMinerBuilt = roundNum;
+            }
         }
     }
 
-    private void makeMiner() throws GameActionException {
+    private boolean makeMiner() throws GameActionException {
         for (Direction d : directions) {
             if (rc.canBuildRobot(RobotType.MINER, d)) {
                 rc.buildRobot(RobotType.MINER, d);
-                return;
+                return true;
             }
         }
+
+        return false;
     }
 }

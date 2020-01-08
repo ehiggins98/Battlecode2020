@@ -10,8 +10,6 @@ public strictfp class RobotPlayer {
     static RobotController rc;
     static Robot robot;
 
-    static int roundNum;
-
     static Team team;
 
     /**
@@ -22,7 +20,6 @@ public strictfp class RobotPlayer {
     public static void run(RobotController rc) throws GameActionException {
         RobotPlayer.rc = rc;
         RobotPlayer.team = rc.getTeam();
-        roundNum = rc.getRoundNum();
         try {
             switch(rc.getType()) {
                 case HQ:
@@ -40,15 +37,15 @@ public strictfp class RobotPlayer {
             System.out.println(rc.getType() + " Exception");
             e.printStackTrace();
         }
-        while (true) {
-            roundNum += 1;
 
+        while (true) {
             try {
-                robot.run(roundNum);
+                robot.run(rc.getRoundNum());
             } catch (Exception e) {
                 System.out.println(rc.getType() + " Exception");
                 e.printStackTrace();
             }
+
             Clock.yield();
         }
     }

@@ -17,13 +17,20 @@ public class PathFinder {
     private RobotController rc;
     private MapLocation goal;
     private HashSet<MapLocation> visited;
+    private boolean failed;
+    private final int MAX_STEPS_PER_GOAL = 90;
+    private int steps = 0;
 
     public PathFinder(RobotController rc) {
         this.rc = rc;
+        failed = false;
         visited = new HashSet<MapLocation>();
     }
 
     public void setGoal(MapLocation goal) {
+        visited.clear();
+        failed = false;
+        steps = 0;
         this.goal = goal;
     }
 
@@ -36,9 +43,16 @@ public class PathFinder {
      * goal or if the goal is unreachable.
      */
     public boolean move() throws GameActionException {
+        steps += 1;
         if (this.rc.getLocation().equals(this.goal)) {
+            System.out.println("Here1");
+            return false;
+        } else if (steps > MAX_STEPS_PER_GOAL) {
+            failed = true;
+            System.out.println("Here2");
             return false;
         }
+
         MapLocation argmin = null;
         Direction argminDir = null;
         double min = Double.POSITIVE_INFINITY;
@@ -52,10 +66,16 @@ public class PathFinder {
                     argmin = newLoc;
                     argminDir = d;
                 }
+            } else if (newLoc.equals(goal)) {
+                failed = true;
+                System.out.println("Here2");
+                return false;
             }
         }
 
         if (argmin == null) {
+            failed = true;
+            System.out.println("Here3");
             return false;
         }
 
@@ -65,7 +85,7 @@ public class PathFinder {
     }
 
     public boolean isFinished() {
-        return this.rc.getLocation().equals(goal);
+        return this.rc.getLocation().equals(goal) || failed;
     }
 
     private boolean isFlooded(Direction d) throws GameActionException {
