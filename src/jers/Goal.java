@@ -19,4 +19,14 @@ public enum Goal {
     public int getId() {
         return id;
     }
+
+    public static Goal fromId(int id) {
+        for (Goal g : Goal.values()) {
+            if (g.getId() == id) {
+                return g;
+            }
+        }
+
+        throw new IllegalArgumentException("ID does not correspond to a Goal");
+    }
 }

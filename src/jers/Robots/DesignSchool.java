@@ -9,6 +9,7 @@ import jers.Messages.RobotBuiltMessage;
 
 public class DesignSchool extends Robot {
 
+    private final int LANDSCAPERS_TO_BUILD = 11; // 3 offensive and 8 defensive
     private int landscapersBuilt;
     private boolean buildLandscaper;
     private boolean needToSendTransaction;
@@ -24,7 +25,7 @@ public class DesignSchool extends Robot {
 
     @Override
     public void run(int roundNum) throws GameActionException {
-        if (buildLandscaper && landscapersBuilt < 3 && (lastLandscaperLoc = makeRobot(RobotType.LANDSCAPER)) != null) {
+        if (buildLandscaper && landscapersBuilt < LANDSCAPERS_TO_BUILD && (lastLandscaperLoc = makeRobot(RobotType.LANDSCAPER)) != null) {
             buildLandscaper = false;
             needToSendTransaction = true;
             landscapersBuilt += 1;
