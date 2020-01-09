@@ -4,7 +4,7 @@ import battlecode.common.*;
 import jers.Goal;
 import jers.Messages.Message;
 import jers.Messages.MessageType;
-import jers.Messages.RefineryBuiltMessage;
+import jers.Messages.RobotBuiltMessage;
 import jers.PathFinder;
 import jers.Transactor;
 
@@ -15,13 +15,14 @@ import static jers.Constants.directions;
 
 public class Miner extends Robot {
     private final int MIN_SOUP_FOR_TRANSACTION = 2 * RobotType.MINER.soupLimit;
-    private final int MAX_EXPLORE_DELTA = 10;
 
     private PathFinder pathFinder;
     private Transactor transactor;
     private MapLocation refineryLocation = null;
+    private MapLocation designSchoolLocation = null;
     private MapLocation soupLocation = null;
     boolean refineryTransactionNeeded = false;
+    boolean designSchoolTransactionNeeded = false;
     private Goal goal = Goal.IDLE;
 
     public Miner(RobotController rc) throws GameActionException {
@@ -43,18 +44,33 @@ public class Miner extends Robot {
     @Override
     public void run(int roundNum) throws GameActionException, IllegalStateException {
         if (refineryLocation == null && roundNum > 59) {
-            refineryLocation = findRefineryLocation(roundNum);
+            refineryLocation = checkRobotBuiltInRange(59, Math.min(roundNum, 119), RobotType.REFINERY);
         }
-        if (refineryTransactionNeeded) {
-            refineryTransactionNeeded = !transactor.submitTransaction(new RefineryBuiltMessage(new RobotType[]{RobotType.MINER}, Goal.ALL, refineryLocation));
-            System.out.println("Transaction submitted? " + !refineryTransactionNeeded);
+        if (designSchoolLocation == null && roundNum > 100) {
+            designSchoolLocation = checkRobotBuiltInRange(100, Math.min(roundNum, 150), RobotType.DESIGN_SCHOOL);
         }
 
-        if (refineryLocation == null) {
-            MapLocation loc = makeRefinery();
+        if (refineryTransactionNeeded) {
+            refineryTransactionNeeded = !transactor.submitTransaction(new RobotBuiltMessage(new RobotType[]{RobotType.MINER, RobotType.HQ}, Goal.ALL, refineryLocation, RobotType.REFINERY));
+        }
+
+        if (designSchoolTransactionNeeded) {
+            designSchoolTransactionNeeded = !transactor.submitTransaction(new RobotBuiltMessage(new RobotType[]{RobotType.MINER, RobotType.HQ}, Goal.ALL, designSchoolLocation, RobotType.DESIGN_SCHOOL));
+        }
+
+        if (refineryLocation == null && rc.getTeamSoup() >= RobotType.REFINERY.cost) {
+            MapLocation loc = makeBuilding(RobotType.REFINERY);
             if (loc != null) {
                 refineryLocation = loc;
                 refineryTransactionNeeded = true;
+            }
+        }
+
+        if (refineryLocation != null && designSchoolLocation == null && rc.getTeamSoup() >= RobotType.DESIGN_SCHOOL.cost) {
+            MapLocation loc = makeBuilding(RobotType.DESIGN_SCHOOL);
+            if (loc != null) {
+                designSchoolLocation = loc;
+                designSchoolTransactionNeeded = true;
             }
         }
 
@@ -76,7 +92,7 @@ public class Miner extends Robot {
                 explore();
                 break;
             default:
-                throw new IllegalStateException("Invalid goal " + goal);
+                throw new IllegalStateException("Invalid goal for miner " + goal);
         }
     }
 
@@ -100,7 +116,7 @@ public class Miner extends Robot {
     }
 
     private void mine() throws GameActionException {
-        boolean success = pathFinder.move();
+        boolean success = pathFinder.move(false);
 
         MapLocation goalLoc = pathFinder.getGoal();
         if (!success || (rc.canSenseLocation(goalLoc) && rc.senseSoup(goalLoc) == 0)) {
@@ -118,7 +134,7 @@ public class Miner extends Robot {
     }
 
     private void refine() throws GameActionException {
-        boolean success = pathFinder.move();
+        boolean success = pathFinder.move(false);
         if (!success) {
             goal = Goal.IDLE;
         }
@@ -131,7 +147,7 @@ public class Miner extends Robot {
     }
 
     private void explore() throws GameActionException {
-        boolean success = pathFinder.move();
+        boolean success = pathFinder.move(false);
         if (!success || pathFinder.isFinished()) {
             pathFinder.setGoal(getRandomGoal());
         }
@@ -139,35 +155,12 @@ public class Miner extends Robot {
         goal = Goal.IDLE;
     }
 
-    private MapLocation getRandomGoal() {
-        Random random = new Random();
-        int dx = random.nextInt(MAX_EXPLORE_DELTA * 2 + 1) - MAX_EXPLORE_DELTA;
-        int dy = random.nextInt(MAX_EXPLORE_DELTA * 2 + 1) - MAX_EXPLORE_DELTA;
-        MapLocation currentLoc = rc.getLocation();
-        return new MapLocation(currentLoc.x + dx, currentLoc.y + dy);
-    }
-
-    private MapLocation makeRefinery() throws GameActionException {
+    private MapLocation makeBuilding(RobotType type) throws GameActionException {
         for (Direction d : directions) {
             MapLocation buildAt = rc.getLocation().add(d);
-            if (rc.canBuildRobot(RobotType.REFINERY, d) && !rc.senseFlooding(buildAt) && rc.senseSoup(buildAt) == 0) {
-                rc.buildRobot(RobotType.REFINERY, d);
+            if (rc.canBuildRobot(type, d) && !rc.senseFlooding(buildAt) && rc.senseSoup(buildAt) == 0) {
+                rc.buildRobot(type, d);
                 return buildAt;
-            }
-        }
-
-        return null;
-    }
-
-    private MapLocation findRefineryLocation(int roundNum) throws GameActionException {
-        // Searching a round costs 100 bytecode, so we'll limit to 50 rounds to
-        // be safe.
-        for (int round = 69; round < Math.min(119, roundNum); round++) {
-            ArrayList<Message> messages = transactor.getBlock(round, this.goal);
-            for (Message m : messages) {
-                if (m.getMessageType() == MessageType.REFINERY_BUILT) {
-                    return ((RefineryBuiltMessage) m).getRefineryLocation();
-                }
             }
         }
 
@@ -226,7 +219,7 @@ public class Miner extends Robot {
                 }
             }
             catch (GameActionException e) {
-                //System.out.println("Not valid coords: " + coord[0] + " " + coord[1]);
+                System.out.println("Not valid coords: " + coord[0] + " " + coord[1]);
             }
         }
 

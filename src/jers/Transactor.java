@@ -2,10 +2,9 @@ package jers;
 
 import battlecode.common.GameActionException;
 import battlecode.common.RobotController;
+import battlecode.common.RobotType;
 import battlecode.common.Transaction;
-import jers.Messages.Message;
-import jers.Messages.MessageType;
-import jers.Messages.RefineryBuiltMessage;
+import jers.Messages.*;
 
 import java.util.ArrayList;
 
@@ -49,8 +48,9 @@ public class Transactor {
 
         for (Transaction t : transactions) {
             if (Message.isForMe(t.getMessage(), rc.getType(), currentGoal, fromRound)) {
-                if (t.getMessage()[2] == MessageType.REFINERY_BUILT.getId()) {
-                    messages.add(new RefineryBuiltMessage(t.getMessage(), 3));
+                int[] msg = t.getMessage();
+                if (msg[2] == MessageType.ROBOT_BUILT.getId()) {
+                    messages.add(new RobotBuiltMessage(msg, 3));
                 }
             }
         }
