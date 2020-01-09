@@ -6,6 +6,7 @@ import jers.Goal;
 import jers.Messages.RobotBuiltMessage;
 
 public class HQ extends Robot {
+    private final int INITIAL_MINER_COUNT = 5;
     private boolean refineryBuilt = false;
     private boolean buildMiner = true;
     private boolean needToSendTransaction = false;
@@ -15,9 +16,8 @@ public class HQ extends Robot {
 
     public HQ(RobotController rc) throws GameActionException {
         super(rc);
-        lastMinerLoc = makeRobot(RobotType.MINER);
-        minersBuilt = 1;
-        goal = Goal.WAIT_FOR_REFINERY;
+        minersBuilt = 0;
+        goal = Goal.BUILD_INITIAL_MINERS;
     }
 
     @Override
@@ -27,8 +27,8 @@ public class HQ extends Robot {
         }
 
         switch (goal) {
-            case WAIT_FOR_REFINERY:
-                waitForRefinery(roundNum);
+            case BUILD_INITIAL_MINERS:
+                buildInitialMiners(roundNum);
                 break;
             case BUILD_LANDSCAPERS_AND_MINERS:
                 buildLandscapersAndMiners(roundNum);
@@ -38,17 +38,14 @@ public class HQ extends Robot {
         }
     }
 
-    private void waitForRefinery(int roundNum) throws GameActionException {
-        if (roundNum == 1) {
-            return;
+    private void buildInitialMiners(int roundNum) throws GameActionException {
+        if (rc.isReady() && rc.getTeamSoup() > RobotType.MINER.cost) {
+            makeRobot(RobotType.MINER);
+            minersBuilt += 1;
         }
 
-        if (refineryBuilt || checkRobotBuiltInRound(roundNum - 1, RobotType.REFINERY) != null) {
-            refineryBuilt = true;
-            if ((lastMinerLoc = makeRobot(RobotType.MINER)) != null) {
-                goal = Goal.BUILD_LANDSCAPERS_AND_MINERS;
-                minersBuilt += 1;
-            }
+        if (minersBuilt >= INITIAL_MINER_COUNT) {
+            goal = Goal.BUILD_LANDSCAPERS_AND_MINERS;
         }
     }
 

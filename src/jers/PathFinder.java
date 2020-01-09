@@ -56,8 +56,8 @@ public class PathFinder {
         double min = Double.POSITIVE_INFINITY;
 
         for (Direction d : Constants.directions) {
-            MapLocation newLoc = this.rc.getLocation().add(d);
-            boolean diggingMightHelp = tryDig && diggingWouldFixBarrier(newLoc) && tryDig;
+            MapLocation newLoc = rc.getLocation().add(d);
+            boolean diggingMightHelp = tryDig && diggingWouldFixBarrier(newLoc);
             if ((rc.canMove(d) || diggingMightHelp) && !visited.contains(newLoc) && !isFlooded(d)) {
                 double dist;
                 if ((dist = newLoc.distanceSquaredTo(goal)) < min) {

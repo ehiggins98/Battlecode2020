@@ -1,6 +1,7 @@
 package jers.Robots;
 
 import battlecode.common.*;
+import jers.Constants;
 import jers.Goal;
 import jers.Messages.InitialGoalMessage;
 import jers.Messages.Message;
@@ -28,12 +29,14 @@ public abstract class Robot {
     Goal goal;
     Transactor transactor;
     int createdOnRound;
+    MapLocation myHQ;
 
-    public Robot(RobotController rc) {
+    public Robot(RobotController rc) throws GameActionException {
         this.rc = rc;
         this.goal = Goal.IDLE;
         this.transactor = new Transactor(rc);
         this.createdOnRound = rc.getRoundNum() - 1;
+        myHQ = rc.getType() == RobotType.HQ ? rc.getLocation() : checkRobotBuiltInRange(1, 50, RobotType.HQ);
     }
 
     MapLocation makeRobot(RobotType type) throws GameActionException {
@@ -47,7 +50,7 @@ public abstract class Robot {
         return null;
     }
 
-    Message checkRobotBuiltInRound(int inRound, RobotType type) throws GameActionException {
+    MapLocation checkRobotBuiltInRound(int inRound, RobotType type) throws GameActionException {
         List<Message> messages = transactor.getBlock(inRound, goal);
         if (messages.size() <= 0) {
             return null;
@@ -56,7 +59,7 @@ public abstract class Robot {
         for (int i = 0; i < messages.size(); i++) {
             Message msg = messages.get(i);
             if (msg.getMessageType() == MessageType.ROBOT_BUILT && ((RobotBuiltMessage) msg).getRobotType() == type) {
-                return messages.get(i);
+                return ((RobotBuiltMessage) messages.get(i)).getRobotLocation();
             }
         }
 
@@ -76,14 +79,6 @@ public abstract class Robot {
         return null;
     }
 
-    MapLocation getRandomGoal() {
-        Random random = new Random();
-        int dx = random.nextInt(MAX_EXPLORE_DELTA * 2 + 1) - MAX_EXPLORE_DELTA;
-        int dy = random.nextInt(MAX_EXPLORE_DELTA * 2 + 1) - MAX_EXPLORE_DELTA;
-        MapLocation currentLoc = rc.getLocation();
-        return new MapLocation(currentLoc.x + dx, currentLoc.y + dy);
-    }
-
     Goal checkInitialGoal(MapLocation initialLocation, int currentRound) throws GameActionException {
         for (int round = createdOnRound; round < Math.min(10 + createdOnRound, currentRound); round++) {
             ArrayList<Message> messages = transactor.getBlock(round, this.goal);
@@ -96,6 +91,41 @@ public abstract class Robot {
                 if (initialGoalMessage.getInitialLocation().equals(initialLocation) && initialGoalMessage.getRoundCreated() == createdOnRound) {
                     return initialGoalMessage.getInitialGoal();
                 }
+            }
+        }
+
+        return null;
+    }
+
+    MapLocation getRandomGoal() {
+        Random random = new Random();
+        int dx = random.nextInt(MAX_EXPLORE_DELTA * 2 + 1) - MAX_EXPLORE_DELTA;
+        int dy = random.nextInt(MAX_EXPLORE_DELTA * 2 + 1) - MAX_EXPLORE_DELTA;
+        MapLocation currentLoc = rc.getLocation();
+        return new MapLocation(currentLoc.x + dx, currentLoc.y + dy);
+    }
+
+    MapLocation findOpenAdjacent(MapLocation center, Direction ideal) throws GameActionException {
+        Direction rotLeft = ideal;
+        Direction rotRight = ideal;
+
+        while (rotLeft != rotRight || rotLeft == ideal) {
+            MapLocation rotLeftLoc = center.add(rotLeft);
+            MapLocation rotRightLoc = center.add(rotRight);
+
+            if (rc.canSenseLocation(rotLeftLoc) && (!rc.isLocationOccupied(rotLeftLoc) || rc.getLocation().equals(rotLeftLoc)) && !rc.senseFlooding(rotLeftLoc)) {
+                return rotLeftLoc;
+            } else if (rc.canSenseLocation(rotRightLoc) && (!rc.isLocationOccupied(rotRightLoc) || rc.getLocation().equals(rotLeftLoc)) && !rc.senseFlooding(rotRightLoc)) {
+                return rotRightLoc;
+            }
+
+            rotLeft = rotLeft.rotateLeft();
+            rotRight = rotRight.rotateRight();
+        }
+
+        for (Direction d : directions) {
+            if (!rc.canSenseLocation(center.add(d))) {
+                return center.add(d);
             }
         }
 

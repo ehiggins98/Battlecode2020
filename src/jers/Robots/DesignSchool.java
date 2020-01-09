@@ -18,7 +18,7 @@ public class DesignSchool extends Robot {
     private MapLocation lastLandscaperLoc = null;
     private int lastCreatedOnRound;
 
-    public DesignSchool(RobotController rc) {
+    public DesignSchool(RobotController rc) throws GameActionException {
         super(rc);
         landscapersBuilt = 0;
         buildLandscaper = true;
