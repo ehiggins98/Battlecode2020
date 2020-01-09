@@ -1,40 +1,64 @@
 package jers.Robots;
 
-import battlecode.common.Direction;
-import battlecode.common.GameActionException;
-import battlecode.common.RobotController;
-import battlecode.common.RobotType;
-
-import static jers.Constants.directions;
+import battlecode.common.*;
+import jers.Constants;
+import jers.Goal;
+import jers.Messages.RobotBuiltMessage;
 
 public class HQ extends Robot {
-    static final int MIN_SOUP_FOR_MINER = 400;
-    static final int MIN_ROUNDS_BETWEEN_MINERS = 100;
-    private int lastMinerBuilt = 0;
+    boolean refineryBuilt = false;
+    boolean buildMiner = true;
+    boolean needToSendTransaction = false;
+    MapLocation lastMinerLoc;
+    boolean locationBroadcast = false;
 
     public HQ(RobotController rc) throws GameActionException {
         super(rc);
-
-        makeMiner();
+        lastMinerLoc = makeRobot(RobotType.MINER);
+        goal = Goal.WAIT_FOR_REFINERY;
     }
 
     @Override
     public void run(int roundNum) throws GameActionException {
-        if (rc.getTeamSoup() >= MIN_SOUP_FOR_MINER && roundNum - lastMinerBuilt > MIN_ROUNDS_BETWEEN_MINERS) {
-            if(makeMiner()) {
-                lastMinerBuilt = roundNum;
+        if (!locationBroadcast && transactor.submitTransaction(new RobotBuiltMessage((RobotType[]) Constants.robotTypes.toArray(), Goal.ALL, rc.getLocation(), RobotType.HQ))) {
+            locationBroadcast = true;
+        }
+
+        switch (goal) {
+            case WAIT_FOR_REFINERY:
+                waitForRefinery(roundNum);
+                break;
+            case BUILD_LANDSCAPERS_AND_MINERS:
+                buildLandscapersAndMiners(roundNum);
+                break;
+            default:
+                throw new IllegalStateException("Invalid goal for HQ: " + goal);
+        }
+    }
+
+    private void waitForRefinery(int roundNum) throws GameActionException {
+        if (roundNum == 1) {
+            return;
+        }
+
+        if (refineryBuilt || checkRobotBuiltInRound(roundNum - 1, RobotType.REFINERY) != null) {
+            refineryBuilt = true;
+            if ((lastMinerLoc = makeRobot(RobotType.MINER)) != null) {
+                goal = Goal.BUILD_LANDSCAPERS_AND_MINERS;
             }
         }
     }
 
-    private boolean makeMiner() throws GameActionException {
-        for (Direction d : directions) {
-            if (rc.canBuildRobot(RobotType.MINER, d)) {
-                rc.buildRobot(RobotType.MINER, d);
-                return true;
-            }
+    private void buildLandscapersAndMiners(int roundNum) throws GameActionException {
+        if (buildMiner && (lastMinerLoc = makeRobot(RobotType.MINER)) != null) {
+            buildMiner = false;
+            needToSendTransaction = true;
+        } else if (!buildMiner && checkRobotBuiltInRound(roundNum - 1, RobotType.LANDSCAPER) != null) {
+            buildMiner = true;
         }
 
-        return false;
+        if (needToSendTransaction && transactor.submitTransaction(new RobotBuiltMessage(new RobotType[]{RobotType.DESIGN_SCHOOL}, Goal.BUILD_LANDSCAPERS_AND_MINERS, lastMinerLoc, RobotType.MINER))) {
+            needToSendTransaction = false;
+        }
     }
 }

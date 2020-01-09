@@ -2,10 +2,14 @@ package jers;
 
 public enum Goal {
     IDLE(0),
-    MINE(1),
-    REFINE(2),
-    EXPLORE(3),
-    ALL(4);
+    MINE(1), // Miner
+    REFINE(2), // Miner
+    EXPLORE(3), // Miner
+    WAIT_FOR_REFINERY(4), // HQ
+    BUILD_LANDSCAPERS_AND_MINERS(6), // HQ and design school
+    FIND_ENEMY_HQ(7), // Landscaper
+    ATTACK_ENEMY_HQ(8), // Landscaper
+    ALL(9);
 
     private final int id;
     private Goal(int id) {

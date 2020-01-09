@@ -1,10 +1,6 @@
 package jers;
 import battlecode.common.*;
-import jers.Messages.RefineryBuiltMessage;
-import jers.Robots.HQ;
-import jers.Robots.Miner;
-import jers.Robots.Refinery;
-import jers.Robots.Robot;
+import jers.Robots.*;
 
 public strictfp class RobotPlayer {
     static RobotController rc;
@@ -30,6 +26,12 @@ public strictfp class RobotPlayer {
                     break;
                 case REFINERY:
                     robot = new Refinery(rc);
+                    break;
+                case DESIGN_SCHOOL:
+                    robot = new DesignSchool(rc);
+                    break;
+                case LANDSCAPER:
+                    robot = new Landscaper(rc);
                     break;
             }
 

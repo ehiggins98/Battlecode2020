@@ -1,9 +1,6 @@
 package jers;
 
-import battlecode.common.Direction;
-import battlecode.common.GameActionException;
-import battlecode.common.MapLocation;
-import battlecode.common.RobotController;
+import battlecode.common.*;
 import com.sun.tools.internal.jxc.ap.Const;
 
 import java.util.HashMap;
@@ -38,11 +35,15 @@ public class PathFinder {
 
     /**
      * Move to the next square on the path
-     *
+     * @param tryDig Whether the pathfinder should try to dig if it hits a wall.
      * @return A value indicating whether we can move. This will be false only if the goal is unreachable.
      */
-    public boolean move() throws GameActionException {
-        steps += 1;
+    public boolean move(boolean tryDig) throws GameActionException {
+        if (tryDig && rc.getType() != RobotType.LANDSCAPER) {
+            throw new IllegalArgumentException("Can't try to dig if unit is not landscaper");
+        }
+
+        boolean dig = false;
         if (this.goal == null || steps > MAX_STEPS_PER_GOAL) {
             failed = true;
             return false;
@@ -56,12 +57,14 @@ public class PathFinder {
 
         for (Direction d : Constants.directions) {
             MapLocation newLoc = this.rc.getLocation().add(d);
-            if (rc.canMove(d) && !visited.contains(newLoc) && !isFlooded(d)) {
+            boolean diggingMightHelp = tryDig && diggingWouldFixBarrier(newLoc) && tryDig;
+            if ((rc.canMove(d) || diggingMightHelp) && !visited.contains(newLoc) && !isFlooded(d)) {
                 double dist;
                 if ((dist = newLoc.distanceSquaredTo(goal)) < min) {
                     min = dist;
                     argmin = newLoc;
                     argminDir = d;
+                    dig = diggingMightHelp;
                 }
             } else if (newLoc.equals(goal)) {
                 failed = true;
@@ -74,16 +77,61 @@ public class PathFinder {
             return false;
         }
 
-        visited.add(argmin);
-        rc.move(argminDir);
+        if (dig) {
+            if (rc.getDirtCarrying() >= rc.getType().dirtLimit && !depositDirt(argminDir)) {
+                return false;
+            }
+            if (rc.senseElevation(argmin) > rc.senseElevation(rc.getLocation()) && rc.canDigDirt(argminDir)) {
+                rc.digDirt(argminDir);
+            } else if (rc.senseElevation(argmin) < rc.senseElevation(rc.getLocation()) && rc.canDigDirt(Direction.CENTER)) {
+                rc.digDirt(Direction.CENTER);
+            }
+        } else {
+            visited.add(argmin);
+            rc.move(argminDir);
+            steps += 1;
+        }
+
         return true;
+    }
+
+    public boolean diggingWouldFixBarrier(MapLocation newLoc) throws GameActionException {
+        return rc.isReady() && rc.canSenseLocation(newLoc) && !rc.isLocationOccupied(newLoc) && Math.abs(rc.senseElevation(newLoc) - rc.senseElevation(rc.getLocation())) > 3;
     }
 
     public boolean isFinished() {
         return this.rc.getLocation().equals(goal) || failed;
     }
 
+    public boolean isFailed() {
+        return this.failed;
+    }
+
     private boolean isFlooded(Direction d) throws GameActionException {
         return rc.senseFlooding(rc.adjacentLocation(d));
+    }
+
+    private boolean depositDirt(Direction comingFrom) throws GameActionException {
+        Direction[] precedence = Constants.directions;
+        int moved = 0;
+        // Don't deposit dirt in the direction we came from or are probably going,
+        // because somebody else will probably come that way. Thus, we try those last.
+        for (int i = 0; i < precedence.length; i++) {
+            if (precedence[i] == comingFrom || precedence[i] == comingFrom.opposite()) {
+                Direction temp = precedence[i];
+                precedence[i] = precedence[precedence.length - moved - 1];
+                precedence[precedence.length - moved - 1] = temp;
+                moved++;
+            }
+        }
+
+        for (Direction d : precedence) {
+            if (rc.canDepositDirt(d)) {
+                rc.depositDirt(d);
+                return true;
+            }
+        }
+
+        return false;
     }
 }

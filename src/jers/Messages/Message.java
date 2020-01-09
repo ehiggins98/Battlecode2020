@@ -78,7 +78,6 @@ public abstract class Message {
         }
 
         if (!checkSigningValue(sentOnRound, msg[0])) {
-            System.out.println("here");
             return false;
         }
 
@@ -102,7 +101,6 @@ public abstract class Message {
     private int makeTargetValue(RobotType[] recipients, Goal recipientGoals) {
         int recipientSpec = getRecipientEncoding(recipients);
         int goalSpec = recipientGoals.getId();
-
         return (goalSpec << RECIPIENT_SPEC_LENGTH) + recipientSpec;
     }
 
