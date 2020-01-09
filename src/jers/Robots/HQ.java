@@ -6,15 +6,17 @@ import jers.Goal;
 import jers.Messages.RobotBuiltMessage;
 
 public class HQ extends Robot {
-    boolean refineryBuilt = false;
-    boolean buildMiner = true;
-    boolean needToSendTransaction = false;
-    MapLocation lastMinerLoc;
-    boolean locationBroadcast = false;
+    private boolean refineryBuilt = false;
+    private boolean buildMiner = true;
+    private boolean needToSendTransaction = false;
+    private MapLocation lastMinerLoc;
+    private boolean locationBroadcast = false;
+    private int minersBuilt;
 
     public HQ(RobotController rc) throws GameActionException {
         super(rc);
         lastMinerLoc = makeRobot(RobotType.MINER);
+        minersBuilt = 1;
         goal = Goal.WAIT_FOR_REFINERY;
     }
 
@@ -45,6 +47,7 @@ public class HQ extends Robot {
             refineryBuilt = true;
             if ((lastMinerLoc = makeRobot(RobotType.MINER)) != null) {
                 goal = Goal.BUILD_LANDSCAPERS_AND_MINERS;
+                minersBuilt += 1;
             }
         }
     }
@@ -53,6 +56,7 @@ public class HQ extends Robot {
         if (buildMiner && (lastMinerLoc = makeRobot(RobotType.MINER)) != null) {
             buildMiner = false;
             needToSendTransaction = true;
+            minersBuilt += 1;
         } else if (!buildMiner && checkRobotBuiltInRound(roundNum - 1, RobotType.LANDSCAPER) != null) {
             buildMiner = true;
         }

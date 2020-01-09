@@ -9,30 +9,50 @@ import java.util.ArrayList;
 
 public class Landscaper extends Robot {
 
+    private MapLocation myHQ;
     // Map is rotationally, horizontally, or vertically symmetric, so we don't know for sure where the HQ is.
     private MapLocation[] theirHQ;
     private int hqTry;
     private PathFinder pathFinder;
     private MapLocation hqLoc;
-    int deposited = 0;
+    private MapLocation initialLocation;
+    private boolean gotInitialGoal;
+    private Direction depositDirection = Direction.CENTER;
 
     public Landscaper(RobotController rc) throws GameActionException {
         super(rc);
-        MapLocation myHQ = checkRobotBuiltInRange(1, 50, RobotType.HQ);
-        goal = Goal.FIND_ENEMY_HQ;
+        myHQ = checkRobotBuiltInRange(1, 50, RobotType.HQ);
+        goal = Goal.IDLE;
         theirHQ = calculateEnemyHQLocations(myHQ);
         hqTry = 0;
         pathFinder = new PathFinder(rc);
+        initialLocation = rc.getLocation();
     }
 
     @Override
     public void run(int roundNum) throws GameActionException {
+        if (!gotInitialGoal && roundNum - createdOnRound < 10) {
+            Goal initialGoal = checkInitialGoal(initialLocation, roundNum);
+            if (initialGoal != null) {
+                goal = initialGoal;
+                gotInitialGoal = true;
+            }
+        }
+
         switch (goal) {
+            case IDLE:
+                break;
             case FIND_ENEMY_HQ:
                 findEnemyHQ();
                 break;
             case ATTACK_ENEMY_HQ:
                 attackEnemyHQ();
+                break;
+            case GO_TO_MY_HQ:
+                goToMyHQ();
+                break;
+            case BUILD_HQ_WALL:
+                buildHQWall();
                 break;
             default:
                 throw new IllegalStateException("Invalid goal for landscaper " + goal);
@@ -72,6 +92,58 @@ public class Landscaper extends Robot {
             rc.depositDirt(hqDir);
         } else {
             digDirt();
+        }
+    }
+
+    private void goToMyHQ() throws GameActionException {
+        if (pathFinder.getGoal() == null || pathFinder.isFailed()) {
+            for (Direction d : Direction.cardinalDirections()) {
+                MapLocation newLoc = myHQ.add(d);
+                if (rc.getLocation().equals(newLoc)) {
+                    goal = Goal.BUILD_HQ_WALL;
+                    return;
+                }
+            }
+
+            for (Direction d : Direction.cardinalDirections()) {
+                MapLocation newLoc = myHQ.add(d);
+                if (rc.canSenseLocation(newLoc) && !rc.isLocationOccupied(newLoc) || !rc.canSenseLocation(newLoc)) {
+                    pathFinder.setGoal(newLoc);
+                    break;
+                }
+            }
+        } else if (pathFinder.isFinished()) {
+            goal = Goal.BUILD_HQ_WALL;
+        }
+
+        if (rc.isReady()) {
+            pathFinder.move(false);
+        }
+    }
+
+    private void buildHQWall() throws GameActionException {
+        if (rc.canDepositDirt(depositDirection) && rc.getDirtCarrying() > 0) {
+            rc.depositDirt(depositDirection);
+
+            if (depositDirection == Direction.CENTER) {
+                depositDirection = rc.getLocation().directionTo(myHQ).rotateLeft().rotateLeft();
+            } else {
+                depositDirection = Direction.CENTER;
+            }
+            return;
+        }
+
+        Direction[] diggingDirs = new Direction[]{
+                rc.getLocation().directionTo(myHQ).opposite(),
+                rc.getLocation().directionTo(myHQ).opposite().rotateLeft(),
+                rc.getLocation().directionTo(myHQ).rotateRight()
+        };
+
+        for (Direction d : diggingDirs) {
+            if (rc.canDigDirt(d)) {
+                rc.digDirt(d);
+                return;
+            }
         }
     }
 

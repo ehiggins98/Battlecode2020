@@ -51,6 +51,8 @@ public class Transactor {
                 int[] msg = t.getMessage();
                 if (msg[2] == MessageType.ROBOT_BUILT.getId()) {
                     messages.add(new RobotBuiltMessage(msg, 3));
+                } else if (msg[2] == MessageType.INITIAL_GOAL.getId()) {
+                    messages.add(new InitialGoalMessage(msg, 3));
                 }
             }
         }

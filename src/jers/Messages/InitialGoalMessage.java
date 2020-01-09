@@ -70,4 +70,16 @@ public class InitialGoalMessage extends Message {
     Goal getRecipientGoal() {
         return this.recipientGoal;
     }
+
+    public MapLocation getInitialLocation() {
+        return this.initialLocation;
+    }
+
+    public int getRoundCreated() {
+        return this.roundCreated;
+    }
+
+    public Goal getInitialGoal() {
+        return this.initialGoal;
+    }
 }

@@ -103,6 +103,10 @@ public class PathFinder {
         return this.rc.getLocation().equals(goal) || failed;
     }
 
+    public boolean isFailed() {
+        return this.failed;
+    }
+
     private boolean isFlooded(Direction d) throws GameActionException {
         return rc.senseFlooding(rc.adjacentLocation(d));
     }
