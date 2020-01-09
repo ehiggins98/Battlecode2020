@@ -2,6 +2,7 @@ package jers.Robots;
 
 import battlecode.common.*;
 import jers.Goal;
+import jers.Messages.InitialGoalMessage;
 import jers.Messages.Message;
 import jers.Messages.MessageType;
 import jers.Messages.RobotBuiltMessage;
@@ -26,11 +27,13 @@ public abstract class Robot {
     RobotController rc;
     Goal goal;
     Transactor transactor;
+    int createdOnRound;
 
     public Robot(RobotController rc) {
         this.rc = rc;
         this.goal = Goal.IDLE;
         this.transactor = new Transactor(rc);
+        this.createdOnRound = rc.getRoundNum() - 1;
     }
 
     MapLocation makeRobot(RobotType type) throws GameActionException {
@@ -46,9 +49,6 @@ public abstract class Robot {
 
     Message checkRobotBuiltInRound(int inRound, RobotType type) throws GameActionException {
         List<Message> messages = transactor.getBlock(inRound, goal);
-        if (rc.getType() == RobotType.DESIGN_SCHOOL && inRound == 133) {
-            System.out.println(messages.size() + " " + type);
-        }
         if (messages.size() <= 0) {
             return null;
         }
@@ -82,5 +82,23 @@ public abstract class Robot {
         int dy = random.nextInt(MAX_EXPLORE_DELTA * 2 + 1) - MAX_EXPLORE_DELTA;
         MapLocation currentLoc = rc.getLocation();
         return new MapLocation(currentLoc.x + dx, currentLoc.y + dy);
+    }
+
+    Goal checkInitialGoal(MapLocation initialLocation, int currentRound) throws GameActionException {
+        for (int round = createdOnRound; round < Math.min(10 + createdOnRound, currentRound); round++) {
+            ArrayList<Message> messages = transactor.getBlock(round, this.goal);
+            for (Message m : messages) {
+                if (m.getMessageType() != MessageType.INITIAL_GOAL) {
+                    continue;
+                }
+
+                InitialGoalMessage initialGoalMessage = (InitialGoalMessage) m;
+                if (initialGoalMessage.getInitialLocation().equals(initialLocation) && initialGoalMessage.getRoundCreated() == createdOnRound) {
+                    return initialGoalMessage.getInitialGoal();
+                }
+            }
+        }
+
+        return null;
     }
 }

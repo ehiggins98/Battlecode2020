@@ -21,6 +21,7 @@ public class Miner extends Robot {
     private MapLocation refineryLocation = null;
     private MapLocation designSchoolLocation = null;
     private MapLocation soupLocation = null;
+    private MapLocation hqLocation = null;
     boolean refineryTransactionNeeded = false;
     boolean designSchoolTransactionNeeded = false;
     private Goal goal = Goal.IDLE;
@@ -31,6 +32,7 @@ public class Miner extends Robot {
         pathFinder = new PathFinder(rc);
         transactor = new Transactor(rc);
         MapLocation localSoup = findLocalSoup();
+        hqLocation = checkRobotBuiltInRange(1, 50, RobotType.HQ);
         if (localSoup != null) {
             if (rc.senseSoup(localSoup) > MIN_SOUP_FOR_TRANSACTION) {
                 //Send a transaction to tell other miners to come here
@@ -158,7 +160,7 @@ public class Miner extends Robot {
     private MapLocation makeBuilding(RobotType type) throws GameActionException {
         for (Direction d : directions) {
             MapLocation buildAt = rc.getLocation().add(d);
-            if (rc.canBuildRobot(type, d) && !rc.senseFlooding(buildAt) && rc.senseSoup(buildAt) == 0) {
+            if (rc.canBuildRobot(type, d) && !rc.senseFlooding(buildAt) && rc.senseSoup(buildAt) == 0 && !buildAt.isAdjacentTo(hqLocation)) {
                 rc.buildRobot(type, d);
                 return buildAt;
             }

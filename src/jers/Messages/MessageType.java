@@ -1,7 +1,8 @@
 package jers.Messages;
 
 public enum MessageType {
-    ROBOT_BUILT(0),;
+    ROBOT_BUILT(0),
+    INITIAL_GOAL(1);
 
     private final int id;
     private MessageType(int id) {

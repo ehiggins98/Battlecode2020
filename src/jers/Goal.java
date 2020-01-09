@@ -9,7 +9,9 @@ public enum Goal {
     BUILD_LANDSCAPERS_AND_MINERS(6), // HQ and design school
     FIND_ENEMY_HQ(7), // Landscaper
     ATTACK_ENEMY_HQ(8), // Landscaper
-    ALL(9);
+    GO_TO_MY_HQ(9), // Landscaper
+    BUILD_HQ_WALL(10), // Landscaper
+    ALL(11);
 
     private final int id;
     private Goal(int id) {
@@ -18,5 +20,15 @@ public enum Goal {
 
     public int getId() {
         return id;
+    }
+
+    public static Goal fromId(int id) {
+        for (Goal g : Goal.values()) {
+            if (g.getId() == id) {
+                return g;
+            }
+        }
+
+        throw new IllegalArgumentException("ID does not correspond to a Goal");
     }
 }

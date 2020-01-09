@@ -5,6 +5,10 @@ import battlecode.common.RobotType;
 import jers.Constants;
 import jers.Goal;
 
+/**
+ * Signals when a robot has been built, and at what location
+ * it was built.
+ */
 public class RobotBuiltMessage extends Message {
 
     private MapLocation builtAt;
