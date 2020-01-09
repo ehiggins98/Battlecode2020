@@ -8,8 +8,6 @@ import jers.PathFinder;
 import java.util.ArrayList;
 
 public class Landscaper extends Robot {
-
-    private MapLocation myHQ;
     // Map is rotationally, horizontally, or vertically symmetric, so we don't know for sure where the HQ is.
     private MapLocation[] theirHQ;
     private int hqTry;
@@ -21,7 +19,6 @@ public class Landscaper extends Robot {
 
     public Landscaper(RobotController rc) throws GameActionException {
         super(rc);
-        myHQ = checkRobotBuiltInRange(1, 50, RobotType.HQ);
         goal = Goal.IDLE;
         theirHQ = calculateEnemyHQLocations(myHQ);
         hqTry = 0;
@@ -90,8 +87,8 @@ public class Landscaper extends Robot {
         Direction hqDir = rc.getLocation().directionTo(hqLoc);
         if (rc.canDepositDirt(hqDir)) {
             rc.depositDirt(hqDir);
-        } else {
-            digDirt();
+        } else if (rc.canDigDirt(Direction.CENTER)) {
+            rc.digDirt(Direction.CENTER);
         }
     }
 
@@ -141,16 +138,6 @@ public class Landscaper extends Robot {
 
         for (Direction d : diggingDirs) {
             if (rc.canDigDirt(d)) {
-                rc.digDirt(d);
-                return;
-            }
-        }
-    }
-
-    private void digDirt() throws GameActionException {
-        for (Direction d : Constants.directions) {
-            RobotInfo info = rc.senseRobotAtLocation(rc.getLocation().add(d));
-            if (rc.canDigDirt(d) && (info == null || info.getType() != RobotType.HQ)) {
                 rc.digDirt(d);
                 return;
             }
