@@ -6,6 +6,8 @@ import jers.Goal;
 import jers.PathFinder;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
 
 public class Landscaper extends Robot {
     // Map is rotationally, horizontally, or vertically symmetric, so we don't know for sure where the HQ is.
@@ -94,21 +96,8 @@ public class Landscaper extends Robot {
 
     private void goToMyHQ() throws GameActionException {
         if (pathFinder.getGoal() == null || pathFinder.isFailed()) {
-            for (Direction d : Direction.cardinalDirections()) {
-                MapLocation newLoc = myHQ.add(d);
-                if (rc.getLocation().equals(newLoc)) {
-                    goal = Goal.BUILD_HQ_WALL;
-                    return;
-                }
-            }
-
-            for (Direction d : Direction.cardinalDirections()) {
-                MapLocation newLoc = myHQ.add(d);
-                if (rc.canSenseLocation(newLoc) && !rc.isLocationOccupied(newLoc) || !rc.canSenseLocation(newLoc)) {
-                    pathFinder.setGoal(newLoc);
-                    break;
-                }
-            }
+            pathFinder.setGoal(findOpenAdjacent(myHQ, rc.getLocation().directionTo(myHQ).opposite(),
+                    new HashSet<>(Arrays.asList(Direction.cardinalDirections()))));
         } else if (pathFinder.isFinished()) {
             goal = Goal.BUILD_HQ_WALL;
         }
@@ -119,7 +108,9 @@ public class Landscaper extends Robot {
     }
 
     private void buildHQWall() throws GameActionException {
-        if (rc.canDepositDirt(depositDirection) && rc.getDirtCarrying() > 0) {
+        RobotInfo occupier = rc.senseRobotAtLocation(rc.getLocation().add(depositDirection));
+        if (rc.canDepositDirt(depositDirection) && rc.getDirtCarrying() > 0 &&
+                (occupier == null || occupier.getType() != RobotType.LANDSCAPER || depositDirection == Direction.CENTER)) {
             rc.depositDirt(depositDirection);
 
             if (depositDirection == Direction.CENTER) {
@@ -130,17 +121,11 @@ public class Landscaper extends Robot {
             return;
         }
 
-        Direction[] diggingDirs = new Direction[]{
-                rc.getLocation().directionTo(myHQ).opposite(),
-                rc.getLocation().directionTo(myHQ).opposite().rotateLeft(),
-                rc.getLocation().directionTo(myHQ).rotateRight()
-        };
-
-        for (Direction d : diggingDirs) {
-            if (rc.canDigDirt(d)) {
-                rc.digDirt(d);
-                return;
-            }
+        MapLocation digLocation = findOpenAdjacent(rc.getLocation(), rc.getLocation().directionTo(myHQ).opposite(),
+                new HashSet<>(Arrays.asList(Constants.directions)));
+        Direction direction = rc.getLocation().directionTo(digLocation);
+        if (rc.canDigDirt(direction)) {
+            rc.digDirt(direction);
         }
     }
 

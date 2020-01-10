@@ -10,6 +10,7 @@ import jers.Messages.RobotBuiltMessage;
 import jers.Transactor;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
 
@@ -105,7 +106,7 @@ public abstract class Robot {
         return new MapLocation(currentLoc.x + dx, currentLoc.y + dy);
     }
 
-    MapLocation findOpenAdjacent(MapLocation center, Direction ideal) throws GameActionException {
+    MapLocation findOpenAdjacent(MapLocation center, Direction ideal, HashSet<Direction> valid) throws GameActionException {
         Direction rotLeft = ideal;
         Direction rotRight = ideal;
 
@@ -113,9 +114,9 @@ public abstract class Robot {
             MapLocation rotLeftLoc = center.add(rotLeft);
             MapLocation rotRightLoc = center.add(rotRight);
 
-            if (rc.canSenseLocation(rotLeftLoc) && (!rc.isLocationOccupied(rotLeftLoc) || rc.getLocation().equals(rotLeftLoc)) && !rc.senseFlooding(rotLeftLoc)) {
+            if (valid.contains(rotLeft) && rc.canSenseLocation(rotLeftLoc) && (!rc.isLocationOccupied(rotLeftLoc) || rc.getLocation().equals(rotLeftLoc)) && !rc.senseFlooding(rotLeftLoc)) {
                 return rotLeftLoc;
-            } else if (rc.canSenseLocation(rotRightLoc) && (!rc.isLocationOccupied(rotRightLoc) || rc.getLocation().equals(rotLeftLoc)) && !rc.senseFlooding(rotRightLoc)) {
+            } else if (valid.contains(rotRight) && rc.canSenseLocation(rotRightLoc) && (!rc.isLocationOccupied(rotRightLoc) || rc.getLocation().equals(rotLeftLoc)) && !rc.senseFlooding(rotRightLoc)) {
                 return rotRightLoc;
             }
 
@@ -123,7 +124,7 @@ public abstract class Robot {
             rotRight = rotRight.rotateRight();
         }
 
-        for (Direction d : directions) {
+        for (Direction d : valid) {
             if (!rc.canSenseLocation(center.add(d))) {
                 return center.add(d);
             }

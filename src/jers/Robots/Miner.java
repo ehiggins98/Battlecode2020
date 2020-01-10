@@ -1,10 +1,14 @@
 package jers.Robots;
 
 import battlecode.common.*;
+import jers.Constants;
 import jers.Goal;
 import jers.Messages.RobotBuiltMessage;
 import jers.PathFinder;
 import jers.Transactor;
+
+import java.util.Arrays;
+import java.util.HashSet;
 
 import static jers.Constants.directions;
 
@@ -108,7 +112,7 @@ public class Miner extends Robot {
 
         if (rc.getSoupCarrying() >= RobotType.MINER.soupLimit) {
             goal = Goal.REFINE;
-            pathFinder.setGoal(findOpenAdjacent(myHQ, rc.getLocation().directionTo(myHQ).opposite()));
+            pathFinder.setGoal(findOpenAdjacent(myHQ, rc.getLocation().directionTo(myHQ).opposite(), new HashSet<>(Arrays.asList(directions))));
         }
     }
 
@@ -137,7 +141,7 @@ public class Miner extends Robot {
     private MapLocation makeBuilding(RobotType type) throws GameActionException {
         for (Direction d : directions) {
             MapLocation buildAt = rc.getLocation().add(d);
-            if (rc.canBuildRobot(type, d) && !rc.senseFlooding(buildAt) && rc.senseSoup(buildAt) == 0 && !buildAt.isAdjacentTo(myHQ)) {
+            if (rc.canBuildRobot(type, d) && !rc.senseFlooding(buildAt) && rc.senseSoup(buildAt) == 0 && buildAt.distanceSquaredTo(myHQ) >= 9) {
                 rc.buildRobot(type, d);
                 return buildAt;
             }

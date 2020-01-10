@@ -11,17 +11,22 @@ import java.util.HashSet;
  * It greedily selects the next unvisited square that's closest to the goal, and moves there.
  */
 public class PathFinder {
+    // Take at most 15 steps without finding a new closest point.
+    private final int MAX_STEPS_WTIHOUT_CLOSEST_DIST_DECREASE = 15;
     private RobotController rc;
     private MapLocation goal;
     private HashSet<MapLocation> visited;
     private boolean failed;
-    private final int MAX_STEPS_PER_GOAL = 90;
     private int steps = 0;
+    private double closestDist;
+    private int closestDistUpdated;
 
     public PathFinder(RobotController rc) {
         this.rc = rc;
         failed = false;
         visited = new HashSet<MapLocation>();
+        closestDist = Integer.MAX_VALUE;
+        closestDistUpdated = 0;
     }
 
     public void setGoal(MapLocation goal) {
@@ -29,6 +34,8 @@ public class PathFinder {
         failed = false;
         steps = 0;
         this.goal = goal;
+        closestDist = Integer.MAX_VALUE;
+        closestDistUpdated = 0;
     }
 
     public MapLocation getGoal() { return this.goal; }
@@ -44,7 +51,7 @@ public class PathFinder {
         }
 
         boolean dig = false;
-        if (this.goal == null || steps > MAX_STEPS_PER_GOAL) {
+        if (this.goal == null || steps - closestDistUpdated > MAX_STEPS_WTIHOUT_CLOSEST_DIST_DECREASE) {
             failed = true;
             return false;
         } else if (this.rc.getLocation().equals(this.goal)) {
@@ -87,6 +94,11 @@ public class PathFinder {
                 rc.digDirt(Direction.CENTER);
             }
         } else {
+            if (min < closestDist) {
+                closestDist = min;
+                closestDistUpdated = steps;
+            }
+
             visited.add(argmin);
             rc.move(argminDir);
             steps += 1;
