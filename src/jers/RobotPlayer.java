@@ -3,19 +3,14 @@ import battlecode.common.*;
 import jers.Robots.*;
 
 public strictfp class RobotPlayer {
-    static RobotController rc;
     static Robot robot;
-
-    static Team team;
 
     /**
      * run() is the method that is called when a robot is instantiated in the Battlecode world.
      * If this method returns, the robot dies!
      **/
     @SuppressWarnings("unused")
-    public static void run(RobotController rc) throws GameActionException {
-        RobotPlayer.rc = rc;
-        RobotPlayer.team = rc.getTeam();
+    public static void run(RobotController rc) {
         try {
             switch(rc.getType()) {
                 case HQ:
@@ -23,9 +18,6 @@ public strictfp class RobotPlayer {
                     break;
                 case MINER:
                     robot = new Miner(rc);
-                    break;
-                case REFINERY:
-                    robot = new Refinery(rc);
                     break;
                 case DESIGN_SCHOOL:
                     robot = new DesignSchool(rc);

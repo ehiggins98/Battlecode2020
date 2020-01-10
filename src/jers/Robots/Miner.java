@@ -1,7 +1,6 @@
 package jers.Robots;
 
 import battlecode.common.*;
-import jers.Constants;
 import jers.Goal;
 import jers.Messages.RobotBuiltMessage;
 import jers.PathFinder;
@@ -9,18 +8,16 @@ import jers.Transactor;
 
 import java.util.Arrays;
 import java.util.HashSet;
-
-import static jers.Constants.directions;
+import java.util.Random;
 
 public class Miner extends Robot {
-    private final int MIN_SOUP_FOR_TRANSACTION = 2 * RobotType.MINER.soupLimit;
+    private final int MAX_EXPLORE_DELTA = 10;
 
     private PathFinder pathFinder;
     private Transactor transactor;
     private MapLocation designSchoolLocation = null;
     private MapLocation soupLocation = null;
     boolean designSchoolTransactionNeeded = false;
-    private Goal goal = Goal.IDLE;
 
     public Miner(RobotController rc) throws GameActionException {
         super(rc);
@@ -30,15 +27,20 @@ public class Miner extends Robot {
         MapLocation soup = findSoup();
 
         if (soup != null) {
-            if (rc.senseSoup(soup) > MIN_SOUP_FOR_TRANSACTION) {
-                //Send a transaction to tell other miners to come here
-            }
-
             pathFinder.setGoal(soup);
             goal = Goal.MINE;
+        } else {
+            goal = Goal.EXPLORE;
         }
     }
 
+    /**
+     * Basically just mine and refine soup until the end of the game. If the miner can't see any soup, it starts
+     * a semi-random walk around the map until it finds some, and then it mines there.
+     * @param roundNum The current round.
+     * @throws GameActionException
+     * @throws IllegalStateException
+     */
     @Override
     public void run(int roundNum) throws GameActionException, IllegalStateException {
         if (designSchoolLocation == null) {
@@ -62,10 +64,6 @@ public class Miner extends Robot {
             designSchoolTransactionNeeded = !transactor.submitTransaction(new RobotBuiltMessage(new RobotType[]{RobotType.MINER, RobotType.HQ}, Goal.ALL, designSchoolLocation, RobotType.DESIGN_SCHOOL));
         }
 
-        if (!rc.isReady()) {
-            return;
-        }
-
         switch (goal) {
             case IDLE:
                 idle();
@@ -84,6 +82,8 @@ public class Miner extends Robot {
         }
     }
 
+    // Execute the idle strategy - if we know where soup is, go there, otherwise look for soup in the vicinity, and
+    // otherwise explore.
     private void idle() throws GameActionException {
         if (soupLocation == null) {
             soupLocation = findSoup();
@@ -97,6 +97,7 @@ public class Miner extends Robot {
         }
     }
 
+    // Execute the mine strategy - go to soup, mine it until we're full, then refine.
     private void mine() throws GameActionException {
         boolean success = pathFinder.move(false);
 
@@ -112,10 +113,11 @@ public class Miner extends Robot {
 
         if (rc.getSoupCarrying() >= RobotType.MINER.soupLimit) {
             goal = Goal.REFINE;
-            pathFinder.setGoal(findOpenAdjacent(myHQ, rc.getLocation().directionTo(myHQ).opposite(), new HashSet<>(Arrays.asList(directions))));
+            pathFinder.setGoal(getOpenTileAdjacent(myHQ, rc.getLocation().directionTo(myHQ).opposite(), new HashSet<>(Arrays.asList(Direction.allDirections()))));
         }
     }
 
+    // Go to the HQ and dump all our soup in, then go back to mining.
     private void refine() throws GameActionException {
         boolean success = pathFinder.move(false);
         if (!success) {
@@ -123,12 +125,14 @@ public class Miner extends Robot {
         }
 
         Direction dirToRefinery = rc.getLocation().directionTo(myHQ);
-        if (rc.canDepositSoup(dirToRefinery) && rc.isReady()) {
+        if (rc.canDepositSoup(dirToRefinery)) {
             rc.depositSoup(dirToRefinery, rc.getSoupCarrying());
             goal = Goal.IDLE;
         }
     }
 
+    // Walk semi-randomly around the map until we see soup. This just generates random goals at most MAX_EXPLORE_DELTA
+    // tiles away from our current location and goes there. If there's no soup visible, it generates another goal.
     private void explore() throws GameActionException {
         boolean success = pathFinder.move(false);
         if (!success || pathFinder.isFinished()) {
@@ -138,8 +142,10 @@ public class Miner extends Robot {
         goal = Goal.IDLE;
     }
 
+    // Make a building. This ensures we don't put the building in water, that it's not on top of soup, and that it's far enough away
+    // from the HQ (just so the building doesn't interfere with building a wall around the HQ.
     private MapLocation makeBuilding(RobotType type) throws GameActionException {
-        for (Direction d : directions) {
+        for (Direction d : Direction.allDirections()) {
             MapLocation buildAt = rc.getLocation().add(d);
             if (rc.canBuildRobot(type, d) && !rc.senseFlooding(buildAt) && rc.senseSoup(buildAt) == 0 && buildAt.distanceSquaredTo(myHQ) >= 9) {
                 rc.buildRobot(type, d);
@@ -150,11 +156,7 @@ public class Miner extends Robot {
         return null;
     }
 
-    /**
-     * Finds the nearest location with soup that we can mine.
-     * @return The nearest location with soup.
-     * @throws GameActionException
-     */
+    // Find the nearest visible soup.
     private MapLocation findSoup() throws GameActionException {
         MapLocation loc = rc.getLocation();
         MapLocation argClosest = null;
@@ -174,5 +176,14 @@ public class Miner extends Robot {
         }
 
         return argClosest;
+    }
+
+    // Get a random goal, used for explore mode.
+    MapLocation getRandomGoal() {
+        Random random = new Random();
+        int dx = random.nextInt(MAX_EXPLORE_DELTA * 2 + 1) - MAX_EXPLORE_DELTA;
+        int dy = random.nextInt(MAX_EXPLORE_DELTA * 2 + 1) - MAX_EXPLORE_DELTA;
+        MapLocation currentLoc = rc.getLocation();
+        return new MapLocation(currentLoc.x + dx, currentLoc.y + dy);
     }
 }

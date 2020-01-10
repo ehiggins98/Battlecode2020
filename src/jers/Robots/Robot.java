@@ -1,7 +1,6 @@
 package jers.Robots;
 
 import battlecode.common.*;
-import jers.Constants;
 import jers.Goal;
 import jers.Messages.InitialGoalMessage;
 import jers.Messages.Message;
@@ -11,14 +10,8 @@ import jers.Transactor;
 
 import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.List;
-import java.util.Random;
-
-import static jers.Constants.directions;
 
 public abstract class Robot {
-
-    private final int MAX_EXPLORE_DELTA = 10;
 
     /**
      * Run one turn for the robot.
@@ -40,8 +33,14 @@ public abstract class Robot {
         myHQ = rc.getType() == RobotType.HQ ? rc.getLocation() : checkRobotBuiltInRange(1, 50, RobotType.HQ);
     }
 
+    /**
+     * Builds a new instance of the given robot type on one available tile.
+     * @param type The type of robot to build.
+     * @return The location at which the robot was built.
+     * @throws GameActionException
+     */
     MapLocation makeRobot(RobotType type) throws GameActionException {
-        for (Direction d : directions) {
+        for (Direction d : Direction.allDirections()) {
             if (rc.canBuildRobot(type, d)) {
                 rc.buildRobot(type, d);
                 return rc.getLocation().add(d);
@@ -51,22 +50,25 @@ public abstract class Robot {
         return null;
     }
 
+    /**
+     * Check if a robot of the given type was built in the given round.
+     * @param inRound The round to check.
+     * @param type The type of robot to check.
+     * @return The location of the robot if one was built, or null otherwise.
+     * @throws GameActionException
+     */
     MapLocation checkRobotBuiltInRound(int inRound, RobotType type) throws GameActionException {
-        List<Message> messages = transactor.getBlock(inRound, goal);
-        if (messages.size() <= 0) {
-            return null;
-        }
-
-        for (int i = 0; i < messages.size(); i++) {
-            Message msg = messages.get(i);
-            if (msg.getMessageType() == MessageType.ROBOT_BUILT && ((RobotBuiltMessage) msg).getRobotType() == type) {
-                return ((RobotBuiltMessage) messages.get(i)).getRobotLocation();
-            }
-        }
-
-        return null;
+        return checkRobotBuiltInRange(inRound, inRound + 1, type);
     }
 
+    /**
+     * Check if a robot was built in the given range of rounds.
+     * @param startRound The first round to check, inclusive.
+     * @param endRound The last round to check, exclusive.
+     * @param type The type of robot to check.
+     * @return The location of the first robot of the given type built in the range, or null if there was none.
+     * @throws GameActionException
+     */
     MapLocation checkRobotBuiltInRange(int startRound, int endRound, RobotType type) throws GameActionException {
         for (int round = startRound; round < endRound; round++) {
             ArrayList<Message> messages = transactor.getBlock(round, this.goal);
@@ -80,9 +82,17 @@ public abstract class Robot {
         return null;
     }
 
+    /**
+     * Get the initial goal for the robot created at the given location in the given round.
+     * @param initialLocation The initial location of the robot for which to retrieve the initial goal.
+     * @param currentRound The current round.
+     * @return The initial goal if a message was sent with one, or IDLE otherwise.
+     * @throws GameActionException
+     */
     Goal checkInitialGoal(MapLocation initialLocation, int currentRound) throws GameActionException {
         for (int round = createdOnRound; round < Math.min(10 + createdOnRound, currentRound); round++) {
             ArrayList<Message> messages = transactor.getBlock(round, this.goal);
+
             for (Message m : messages) {
                 if (m.getMessageType() != MessageType.INITIAL_GOAL) {
                     continue;
@@ -95,18 +105,19 @@ public abstract class Robot {
             }
         }
 
-        return null;
+        return Goal.IDLE;
     }
 
-    MapLocation getRandomGoal() {
-        Random random = new Random();
-        int dx = random.nextInt(MAX_EXPLORE_DELTA * 2 + 1) - MAX_EXPLORE_DELTA;
-        int dy = random.nextInt(MAX_EXPLORE_DELTA * 2 + 1) - MAX_EXPLORE_DELTA;
-        MapLocation currentLoc = rc.getLocation();
-        return new MapLocation(currentLoc.x + dx, currentLoc.y + dy);
-    }
-
-    MapLocation findOpenAdjacent(MapLocation center, Direction ideal, HashSet<Direction> valid) throws GameActionException {
+    /**
+     * Get an open tile adjacent to the given tile, starting from the ideal direction and proceeding outward through the
+     * given valid directions.
+     * @param center The tile for which to find an adjacent location.
+     * @param ideal The ideal direction.
+     * @param valid Valid directions to consider.
+     * @return The open location closest to the ideal direction, or null if there is no open valid direction.
+     * @throws GameActionException
+     */
+    MapLocation getOpenTileAdjacent(MapLocation center, Direction ideal, HashSet<Direction> valid) throws GameActionException {
         Direction rotLeft = ideal;
         Direction rotRight = ideal;
 

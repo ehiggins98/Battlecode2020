@@ -1,9 +1,7 @@
 package jers;
 
 import battlecode.common.*;
-import com.sun.tools.internal.jxc.ap.Const;
 
-import java.util.HashMap;
 import java.util.HashSet;
 
 /**
@@ -13,6 +11,7 @@ import java.util.HashSet;
 public class PathFinder {
     // Take at most 15 steps without finding a new closest point.
     private final int MAX_STEPS_WTIHOUT_CLOSEST_DIST_DECREASE = 15;
+
     private RobotController rc;
     private MapLocation goal;
     private HashSet<MapLocation> visited;
@@ -21,14 +20,23 @@ public class PathFinder {
     private double closestDist;
     private int closestDistUpdated;
 
+    /**
+     * Initializes the pathfinder with no goal.
+     * @param rc The RobotController to use.
+     */
     public PathFinder(RobotController rc) {
         this.rc = rc;
         failed = false;
-        visited = new HashSet<MapLocation>();
+        visited = new HashSet<>();
         closestDist = Integer.MAX_VALUE;
         closestDistUpdated = 0;
     }
 
+    /**
+     * Sets a new goal for the pathfinder. This resets all appropriate state,
+     * and sets the pathfinder to a non-failed state.
+     * @param goal The new goal to use.
+     */
     public void setGoal(MapLocation goal) {
         visited.clear();
         failed = false;
@@ -38,7 +46,35 @@ public class PathFinder {
         closestDistUpdated = 0;
     }
 
+    /**
+     * Get the current goal of the pathfinder.
+     * @return The current goal of the pathfinder.
+     */
     public MapLocation getGoal() { return this.goal; }
+
+    /**
+     * Gets a value indicating whether the pathfinder reached its goal successfully.
+     * @return A value indicating whether the pathfinder reached its goal successfully.
+     */
+    public boolean isSuccess() {
+        return this.rc.getLocation().equals(goal);
+    }
+
+    /**
+     * Gets a value indicating whether the pathfinder failed in reaching its goal.
+     * @return Gets a value indicating whether the pathfinder failed in reaching its goal.
+     */
+    public boolean isFailed() {
+        return this.failed;
+    }
+
+    /**
+     * Gets a value indicating whether the pathfinder is finished (i.e. failed or succeeded).
+     * @return A value indicating whether the pathfinder is finished.
+     */
+    public boolean isFinished() {
+        return isFailed() || isSuccess();
+    }
 
     /**
      * Move to the next square on the path
@@ -58,19 +94,17 @@ public class PathFinder {
             return true;
         }
 
-        MapLocation argmin = null;
-        Direction argminDir = null;
+        Direction nextStep = null;
         double min = Double.POSITIVE_INFINITY;
 
         for (Direction d : Constants.directions) {
             MapLocation newLoc = rc.getLocation().add(d);
             boolean diggingMightHelp = tryDig && diggingWouldFixBarrier(newLoc);
-            if ((rc.canMove(d) || diggingMightHelp) && !visited.contains(newLoc) && !isFlooded(d)) {
+            if ((rc.canMove(d) || diggingMightHelp) && !visited.contains(newLoc) && !rc.senseFlooding(rc.getLocation().add(d))) {
                 double dist;
                 if ((dist = newLoc.distanceSquaredTo(goal)) < min) {
                     min = dist;
-                    argmin = newLoc;
-                    argminDir = d;
+                    nextStep = d;
                     dig = diggingMightHelp;
                 }
             } else if (newLoc.equals(goal)) {
@@ -79,18 +113,19 @@ public class PathFinder {
             }
         }
 
-        if (argmin == null) {
+        if (nextStep == null) {
             failed = true;
             return false;
         }
 
         if (dig) {
-            if (rc.getDirtCarrying() >= rc.getType().dirtLimit && !depositDirt(argminDir)) {
+            if (rc.getDirtCarrying() >= rc.getType().dirtLimit && !depositDirtAvoiding(nextStep)) {
                 return false;
             }
-            if (rc.senseElevation(argmin) > rc.senseElevation(rc.getLocation()) && rc.canDigDirt(argminDir)) {
-                rc.digDirt(argminDir);
-            } else if (rc.senseElevation(argmin) < rc.senseElevation(rc.getLocation()) && rc.canDigDirt(Direction.CENTER)) {
+
+            if (rc.senseElevation(rc.getLocation().add(nextStep)) > rc.senseElevation(rc.getLocation()) && rc.canDigDirt(nextStep)) {
+                rc.digDirt(nextStep);
+            } else if (rc.canDigDirt(Direction.CENTER)) {
                 rc.digDirt(Direction.CENTER);
             }
         } else {
@@ -99,32 +134,22 @@ public class PathFinder {
                 closestDistUpdated = steps;
             }
 
-            visited.add(argmin);
-            rc.move(argminDir);
+            visited.add(rc.getLocation().add(nextStep));
+            rc.move(nextStep);
             steps += 1;
         }
 
         return true;
     }
 
-    public boolean diggingWouldFixBarrier(MapLocation newLoc) throws GameActionException {
-        return rc.isReady() && rc.canSenseLocation(newLoc) && !rc.isLocationOccupied(newLoc) && Math.abs(rc.senseElevation(newLoc) - rc.senseElevation(rc.getLocation())) > 3;
+    // Get a value indicating whether digging would allow us to pass a barrier
+    private boolean diggingWouldFixBarrier(MapLocation newLoc) throws GameActionException {
+        return rc.isReady() && rc.canSenseLocation(newLoc) && !rc.isLocationOccupied(newLoc) && Math.abs(rc.senseElevation(newLoc) - rc.senseElevation(rc.getLocation())) > GameConstants.MAX_DIRT_DIFFERENCE;
     }
 
-    public boolean isFinished() {
-        return this.rc.getLocation().equals(goal) || failed;
-    }
-
-    public boolean isFailed() {
-        return this.failed;
-    }
-
-    private boolean isFlooded(Direction d) throws GameActionException {
-        return rc.senseFlooding(rc.adjacentLocation(d));
-    }
-
-    private boolean depositDirt(Direction comingFrom) throws GameActionException {
-        Direction[] precedence = Constants.directions;
+    // Deposit dirt while avoiding the direction we came from and its opposite if possible.
+    private boolean depositDirtAvoiding(Direction comingFrom) throws GameActionException {
+        Direction[] precedence = Direction.allDirections();
         int moved = 0;
         // Don't deposit dirt in the direction we came from or are probably going,
         // because somebody else will probably come that way. Thus, we try those last.

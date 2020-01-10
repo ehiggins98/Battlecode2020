@@ -2,7 +2,6 @@ package jers;
 
 import battlecode.common.GameActionException;
 import battlecode.common.RobotController;
-import battlecode.common.RobotType;
 import battlecode.common.Transaction;
 import jers.Messages.*;
 
@@ -31,6 +30,14 @@ public class Transactor {
         return false;
     }
 
+    /**
+     * Read the block from the given turn, filter the transactions to those meant for our team, the current robot type,
+     * and the given goal, and return a list of them.
+     * @param roundNum The turn for which to read transactions.
+     * @param currentGoal The goal on which to filter transactions.
+     * @return A list of messages sent on the given turn, meant for the current robot type and goal.
+     * @throws GameActionException
+     */
     public ArrayList<Message> getBlock(int roundNum, Goal currentGoal) throws GameActionException {
         Transaction[] transactions = rc.getBlock(roundNum);
         return deserializeBlock(transactions, roundNum, currentGoal);

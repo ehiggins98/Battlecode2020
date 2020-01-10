@@ -2,9 +2,9 @@ package jers.Messages;
 
 import battlecode.common.GameConstants;
 import battlecode.common.RobotType;
-import battlecode.common.Transaction;
-import jers.Constants;
 import jers.Goal;
+
+import java.util.Arrays;
 
 public abstract class Message {
     /**
@@ -84,6 +84,8 @@ public abstract class Message {
         return checkTargetValue(msg[1], type, goal);
     }
 
+    // Make the signing value. This has as the least-significant 17 bits the SECRET_VALUE, and as the
+    // most-significant 15 bits the round % MODULUS repeated 3 times.
     private static int makeSigningValue(int roundNum) {
         if (MODULUS > 32) {
             throw new IllegalArgumentException("Modulus can be at most 32");
@@ -93,19 +95,23 @@ public abstract class Message {
         return (((((hash << 5) + hash) << 5) + hash) << 17) + SECRET_VALUE;
     }
 
+    // Check the received signing value.
     private static boolean checkSigningValue(int roundNum, int signingValue) {
         int expected = makeSigningValue(roundNum);
         return signingValue == expected;
     }
 
+    // This uses the goal ID as the most-significant 16 bits, and a one-hot encoding of the intended recipients
+    // as the least-significant 15 bits.
     private int makeTargetValue(RobotType[] recipients, Goal recipientGoals) {
         int recipientSpec = getRecipientEncoding(recipients);
         int goalSpec = recipientGoals.getId();
         return (goalSpec << RECIPIENT_SPEC_LENGTH) + recipientSpec;
     }
 
+    // Check whether the received target value is targeting the given robot type and goal.
     private static boolean checkTargetValue(int value, RobotType type, Goal goal) {
-        int robotTypeEncoding = Constants.robotTypes.indexOf(type);
+        int robotTypeEncoding = Arrays.asList(RobotType.values()).indexOf(type);
         if ((value >> robotTypeEncoding) % 2 == 0) {
             return false;
         }
@@ -114,13 +120,14 @@ public abstract class Message {
         return goalSpec == goal.getId() || goalSpec == Goal.ALL.getId();
     }
 
+    // Get the encoding for the given recipient list.
     private int getRecipientEncoding(RobotType[] types) {
         int value = 0;
 
         // This is a one-hot encoding, so a robot can check if it should pay
         // attention to a given message in O(1) time.
         for (RobotType type : types) {
-            value |= 1 << Constants.robotTypes.indexOf(type);
+            value |= 1 << Arrays.asList(RobotType.values()).indexOf(type);
         }
 
         return value;

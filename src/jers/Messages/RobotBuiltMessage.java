@@ -2,8 +2,9 @@ package jers.Messages;
 
 import battlecode.common.MapLocation;
 import battlecode.common.RobotType;
-import jers.Constants;
 import jers.Goal;
+
+import java.util.Arrays;
 
 /**
  * Signals when a robot has been built, and at what location
@@ -25,7 +26,7 @@ public class RobotBuiltMessage extends Message {
 
     public RobotBuiltMessage(int[] data, int index) {
         builtAt = new MapLocation(data[index], data[index + 1]);
-        type = Constants.robotTypes.get(data[index + 2]);
+        type = Arrays.asList(RobotType.values()).get(data[index + 2]);
     }
 
     @Override
@@ -35,7 +36,7 @@ public class RobotBuiltMessage extends Message {
 
     @Override
     public int[] getParams() {
-        return new int[]{this.builtAt.x, this.builtAt.y, Constants.robotTypes.indexOf(type)};
+        return new int[]{this.builtAt.x, this.builtAt.y, Arrays.asList(RobotType.values()).indexOf(type)};
     }
 
     @Override

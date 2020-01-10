@@ -11,31 +11,29 @@ import java.util.HashSet;
 
 public class Landscaper extends Robot {
     // Map is rotationally, horizontally, or vertically symmetric, so we don't know for sure where the HQ is.
-    private MapLocation[] theirHQ;
+    private MapLocation[] theirHQPossibilities;
     private int hqTry;
+    private MapLocation theirHQ;
     private PathFinder pathFinder;
-    private MapLocation hqLoc;
-    private MapLocation initialLocation;
-    private boolean gotInitialGoal;
     private Direction depositDirection = Direction.CENTER;
 
     public Landscaper(RobotController rc) throws GameActionException {
         super(rc);
-        goal = Goal.IDLE;
-        theirHQ = calculateEnemyHQLocations(myHQ);
+        theirHQPossibilities = calculateEnemyHQLocations(myHQ);
         hqTry = 0;
         pathFinder = new PathFinder(rc);
-        initialLocation = rc.getLocation();
     }
 
+    /**
+     * Some landscapers build a wall around the HQ, while others find the enemy HQ and attempt to bury it.
+     * These attacking landscapers will dig through walls built by the enemy.
+     * @param roundNum The current round number.
+     * @throws GameActionException
+     */
     @Override
     public void run(int roundNum) throws GameActionException {
-        if (!gotInitialGoal && roundNum - createdOnRound < 10) {
-            Goal initialGoal = checkInitialGoal(initialLocation, roundNum);
-            if (initialGoal != null) {
-                goal = initialGoal;
-                gotInitialGoal = true;
-            }
+        if ((goal == null || goal == Goal.IDLE) && roundNum - createdOnRound < GameConstants.INITIAL_COOLDOWN_TURNS) {
+            goal = checkInitialGoal(rc.getLocation(), roundNum);
         }
 
         switch (goal) {
@@ -58,21 +56,26 @@ public class Landscaper extends Robot {
         }
     }
 
+    // Find the enemy HQ. We know the map is horizontally, vertically, or rotationally symmetric, so we have only
+    // three locations where it can be. Thus, we try these possibilities until we find the HQ, then switch to
+    // the attack goal.
     private void findEnemyHQ() throws GameActionException {
         if (pathFinder.getGoal() == null || (pathFinder.isFinished() && !canSeeEnemyHQ())) {
             if (hqTry < 3) {
-                pathFinder.setGoal(theirHQ[hqTry].subtract(rc.getLocation().directionTo(theirHQ[hqTry])));
+                pathFinder.setGoal(theirHQPossibilities[hqTry].subtract(rc.getLocation().directionTo(theirHQPossibilities[hqTry])));
                 hqTry++;
             } else {
                 // We can't get to the enemy HQ
                 goal = Goal.IDLE;
             }
         } else if (pathFinder.isFinished() && canSeeEnemyHQ()) {
-            if (rc.getLocation().isAdjacentTo(theirHQ[hqTry - 1])) {
+            if (rc.getLocation().isAdjacentTo(theirHQPossibilities[hqTry - 1])) {
                 goal = Goal.ATTACK_ENEMY_HQ;
-                hqLoc = theirHQ[hqTry-1];
+                theirHQ = theirHQPossibilities[hqTry-1];
             } else {
-                MapLocation newGoal = getNewGoal();
+                MapLocation newGoal = getOpenTileAdjacent(theirHQPossibilities[hqTry-1],
+                        theirHQPossibilities[hqTry-1].directionTo(rc.getLocation()), new HashSet<>(Arrays.asList(Direction.allDirections())));
+
                 if (newGoal == null) {
                     goal = Goal.IDLE;
                 } else {
@@ -85,8 +88,9 @@ public class Landscaper extends Robot {
         }
     }
 
+    // Try to bury the enemy HQ.
     private void attackEnemyHQ() throws GameActionException {
-        Direction hqDir = rc.getLocation().directionTo(hqLoc);
+        Direction hqDir = rc.getLocation().directionTo(theirHQ);
         if (rc.canDepositDirt(hqDir)) {
             rc.depositDirt(hqDir);
         } else if (rc.canDigDirt(Direction.CENTER)) {
@@ -94,10 +98,11 @@ public class Landscaper extends Robot {
         }
     }
 
+    // For defensive landscapers, go to our HQ. Since we have 4 landscapers building the wall, they stand at the
+    // cardinal directions and build 2 tiles of the wall.
     private void goToMyHQ() throws GameActionException {
         if (pathFinder.getGoal() == null || pathFinder.isFailed()) {
-            pathFinder.setGoal(findOpenAdjacent(myHQ, rc.getLocation().directionTo(myHQ).opposite(),
-                    new HashSet<>(Arrays.asList(Direction.cardinalDirections()))));
+            pathFinder.setGoal(getOpenTileAdjacent(myHQ, myHQ.directionTo(rc.getLocation()), new HashSet<>(Arrays.asList(Direction.cardinalDirections()))));
         } else if (pathFinder.isFinished()) {
             goal = Goal.BUILD_HQ_WALL;
         }
@@ -107,6 +112,7 @@ public class Landscaper extends Robot {
         }
     }
 
+    // Build the wall. Each landscaper handles 2 tiles.
     private void buildHQWall() throws GameActionException {
         RobotInfo occupier = rc.senseRobotAtLocation(rc.getLocation().add(depositDirection));
         if (rc.canDepositDirt(depositDirection) && rc.getDirtCarrying() > 0 &&
@@ -121,14 +127,13 @@ public class Landscaper extends Robot {
             return;
         }
 
-        MapLocation digLocation = findOpenAdjacent(rc.getLocation(), rc.getLocation().directionTo(myHQ).opposite(),
-                new HashSet<>(Arrays.asList(Constants.directions)));
-        Direction direction = rc.getLocation().directionTo(digLocation);
-        if (rc.canDigDirt(direction)) {
-            rc.digDirt(direction);
+        Direction digDirection = getDigDirection();
+        if (rc.canDigDirt(digDirection)) {
+            rc.digDirt(digDirection);
         }
     }
 
+    // Check if we can see the enemy HQ.
     private boolean canSeeEnemyHQ() throws GameActionException {
         int radius = (int)Math.sqrt(rc.getType().sensorRadiusSquared);
         for (int dx = -radius; dx < radius; dx++) {
@@ -148,17 +153,8 @@ public class Landscaper extends Robot {
         return false;
     }
 
-    private MapLocation getNewGoal() throws GameActionException {
-        for (Direction d : Constants.directions) {
-            MapLocation newGoal = theirHQ[hqTry - 1].add(d);
-            if (!rc.isLocationOccupied(newGoal)) {
-                return newGoal;
-            }
-        }
-
-        return null;
-    }
-
+    // Calculate possible locations of the enemy HQ, given that the map is horizontally, vertically, or rotationally
+    // symmetric.
     private MapLocation[] calculateEnemyHQLocations(MapLocation myHQ) {
         ArrayList<MapLocation> locations = new ArrayList<MapLocation>(3);
         // Vertical axis of symmetry
@@ -195,5 +191,21 @@ public class Landscaper extends Robot {
         }
 
         return sorted;
+    }
+
+    // Find the direction in which to dig dirt while building the HQ wall. This will avoid destroying the wall
+    // and won't dig other landscapers into a ditch.
+    private Direction getDigDirection() throws GameActionException {
+        Direction perpendicular = myHQ.directionTo(rc.getLocation());
+        Direction[] possibilities = new Direction[]{perpendicular, perpendicular.rotateLeft(), perpendicular.rotateLeft()};
+
+        for (Direction d : possibilities) {
+            RobotInfo occupier = rc.senseRobotAtLocation(rc.getLocation().add(d));
+            if (rc.canDigDirt(d) && (occupier == null || occupier.getType() != RobotType.LANDSCAPER)) {
+                return d;
+            }
+        }
+
+        return null;
     }
 }
