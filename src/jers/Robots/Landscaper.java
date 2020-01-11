@@ -19,6 +19,7 @@ public class Landscaper extends Robot {
 
     public Landscaper(RobotController rc) throws GameActionException {
         super(rc);
+        myHQ = checkRobotBuiltInRange(1, 20, RobotType.HQ);
         theirHQPossibilities = calculateEnemyHQLocations(myHQ);
         hqTry = 0;
         pathFinder = new PathFinder(rc);
@@ -36,23 +37,26 @@ public class Landscaper extends Robot {
             goal = checkInitialGoal(rc.getLocation(), roundNum);
         }
 
-        switch (goal) {
-            case IDLE:
-                break;
-            case FIND_ENEMY_HQ:
-                findEnemyHQ();
-                break;
-            case ATTACK_ENEMY_HQ:
-                attackEnemyHQ();
-                break;
-            case GO_TO_MY_HQ:
-                goToMyHQ();
-                break;
-            case BUILD_HQ_WALL:
-                buildHQWall();
-                break;
-            default:
-                throw new IllegalStateException("Invalid goal for landscaper " + goal);
+        // Without the while loop we waste turns changing goals
+        while (rc.isReady() && goal != null && goal != Goal.IDLE) {
+            switch (goal) {
+                case IDLE:
+                    break;
+                case FIND_ENEMY_HQ:
+                    findEnemyHQ();
+                    break;
+                case ATTACK_ENEMY_HQ:
+                    attackEnemyHQ();
+                    break;
+                case GO_TO_MY_HQ:
+                    goToMyHQ();
+                    break;
+                case BUILD_HQ_WALL:
+                    buildHQWall();
+                    break;
+                default:
+                    throw new IllegalStateException("Invalid goal for landscaper " + goal);
+            }
         }
     }
 
@@ -74,7 +78,7 @@ public class Landscaper extends Robot {
                 theirHQ = theirHQPossibilities[hqTry-1];
             } else {
                 MapLocation newGoal = getOpenTileAdjacent(theirHQPossibilities[hqTry-1],
-                        theirHQPossibilities[hqTry-1].directionTo(rc.getLocation()), new HashSet<>(Arrays.asList(Direction.allDirections())));
+                        theirHQPossibilities[hqTry-1].directionTo(rc.getLocation()), Constants.directions, false);
 
                 if (newGoal == null) {
                     goal = Goal.IDLE;
@@ -90,19 +94,19 @@ public class Landscaper extends Robot {
 
     // Try to bury the enemy HQ.
     private void attackEnemyHQ() throws GameActionException {
-        Direction hqDir = rc.getLocation().directionTo(theirHQ);
+        /*Direction hqDir = rc.getLocation().directionTo(theirHQ);
         if (rc.canDepositDirt(hqDir)) {
             rc.depositDirt(hqDir);
         } else if (rc.canDigDirt(Direction.CENTER)) {
             rc.digDirt(Direction.CENTER);
-        }
+        }*/
     }
 
     // For defensive landscapers, go to our HQ. Since we have 4 landscapers building the wall, they stand at the
     // cardinal directions and build 2 tiles of the wall.
-    private void goToMyHQ() throws GameActionException {
+    private void goToMyHQ() throws GameActionException { ;
         if (pathFinder.getGoal() == null || pathFinder.isFailed()) {
-            pathFinder.setGoal(getOpenTileAdjacent(myHQ, myHQ.directionTo(rc.getLocation()), new HashSet<>(Arrays.asList(Direction.cardinalDirections()))));
+            pathFinder.setGoal(getOpenTileAdjacent(myHQ, myHQ.directionTo(rc.getLocation()), Constants.cardinalDirections, false));
         } else if (pathFinder.isFinished()) {
             goal = Goal.BUILD_HQ_WALL;
         }
@@ -128,7 +132,7 @@ public class Landscaper extends Robot {
         }
 
         Direction digDirection = getDigDirection();
-        if (rc.canDigDirt(digDirection)) {
+        if (digDirection != null && rc.canDigDirt(digDirection)) {
             rc.digDirt(digDirection);
         }
     }

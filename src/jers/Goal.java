@@ -11,6 +11,8 @@ public enum Goal {
     ATTACK_ENEMY_HQ(8), // Landscaper
     GO_TO_MY_HQ(9), // Landscaper
     BUILD_HQ_WALL(10), // Landscaper
+    BUILD_REFINERY(11), // Miner,
+    STARTUP(12), // Miner
     ALL(11);
 
     private final int id;

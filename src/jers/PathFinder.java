@@ -97,7 +97,7 @@ public class PathFinder {
         Direction nextStep = null;
         double min = Double.POSITIVE_INFINITY;
 
-        for (Direction d : Constants.directions) {
+        for (Direction d : Direction.allDirections()) {
             MapLocation newLoc = rc.getLocation().add(d);
             boolean diggingMightHelp = tryDig && diggingWouldFixBarrier(newLoc);
             if ((rc.canMove(d) || diggingMightHelp) && !visited.contains(newLoc) && !rc.senseFlooding(rc.getLocation().add(d))) {
@@ -136,6 +136,7 @@ public class PathFinder {
 
             visited.add(rc.getLocation().add(nextStep));
             rc.move(nextStep);
+            rc.setIndicatorLine(rc.getLocation(), goal, 0, 255, 0);
             steps += 1;
         }
 

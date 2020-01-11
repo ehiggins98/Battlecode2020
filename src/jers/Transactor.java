@@ -56,10 +56,12 @@ public class Transactor {
         for (Transaction t : transactions) {
             if (Message.isForMe(t.getMessage(), rc.getType(), currentGoal, fromRound)) {
                 int[] msg = t.getMessage();
-                if (msg[2] == MessageType.ROBOT_BUILT.getId()) {
+                if (msg[2] == MessageType.ROBOT_BUILT.id) {
                     messages.add(new RobotBuiltMessage(msg, 3));
-                } else if (msg[2] == MessageType.INITIAL_GOAL.getId()) {
+                } else if (msg[2] == MessageType.INITIAL_GOAL.id) {
                     messages.add(new InitialGoalMessage(msg, 3));
+                } else if (msg[2] == MessageType.SOUP_FOUND.id) {
+                    messages.add(new SoupFoundMessage(msg, 3));
                 }
             }
         }

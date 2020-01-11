@@ -25,6 +25,9 @@ public strictfp class RobotPlayer {
                 case LANDSCAPER:
                     robot = new Landscaper(rc);
                     break;
+                case REFINERY:
+                    robot = new Refinery(rc);
+                    break;
             }
 
         } catch (Exception e) {

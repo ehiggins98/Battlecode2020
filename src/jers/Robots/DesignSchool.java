@@ -8,9 +8,11 @@ import jers.Goal;
 import jers.Messages.InitialGoalMessage;
 import jers.Messages.RobotBuiltMessage;
 
+import static jers.Constants.INITIAL_ATTACKING_LANDSCAPERS;
+import static jers.Constants.LANDSCAPERS_FOR_WALL;
+
 public class DesignSchool extends Robot {
 
-    private final int LANDSCAPERS_TO_BUILD = 7; // 3 offensive and 4 defensive
     private int landscapersBuilt;
     private boolean buildLandscaper;
     private InitialGoalMessage initialGoalMessage;
@@ -21,6 +23,7 @@ public class DesignSchool extends Robot {
         landscapersBuilt = 0;
         buildLandscaper = true;
         goal = Goal.BUILD_LANDSCAPERS_AND_MINERS;
+        myHQ = checkRobotBuiltInRange(1, 20, RobotType.HQ);
     }
 
     /**
@@ -31,7 +34,7 @@ public class DesignSchool extends Robot {
      */
     @Override
     public void run(int roundNum) throws GameActionException {
-        if (buildLandscaper && landscapersBuilt < LANDSCAPERS_TO_BUILD) {
+        if (buildLandscaper && landscapersBuilt < INITIAL_ATTACKING_LANDSCAPERS + LANDSCAPERS_FOR_WALL) {
             MapLocation builtAt = makeRobot(RobotType.LANDSCAPER);
             if (builtAt == null) {
                 return;
@@ -40,9 +43,9 @@ public class DesignSchool extends Robot {
             buildLandscaper = false;
             landscapersBuilt += 1;
             initialGoalMessage = new InitialGoalMessage(new RobotType[]{RobotType.LANDSCAPER},
-                    Goal.ALL, builtAt, roundNum, landscapersBuilt > 3 ? Goal.GO_TO_MY_HQ : Goal.FIND_ENEMY_HQ);
-            robotBuiltMessage = new RobotBuiltMessage(new RobotType[]{RobotType.HQ},
-                    Goal.BUILD_LANDSCAPERS_AND_MINERS, builtAt, RobotType.LANDSCAPER);
+                    Goal.ALL, builtAt, roundNum, landscapersBuilt > INITIAL_ATTACKING_LANDSCAPERS ? Goal.GO_TO_MY_HQ : Goal.FIND_ENEMY_HQ);
+            robotBuiltMessage = new RobotBuiltMessage(new RobotType[]{RobotType.HQ, RobotType.MINER},
+                    Goal.ALL, builtAt, RobotType.LANDSCAPER);
         } else if (!buildLandscaper && checkRobotBuiltInRound(roundNum - 1, RobotType.MINER) != null) {
             buildLandscaper = true;
         }

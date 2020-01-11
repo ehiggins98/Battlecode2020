@@ -57,7 +57,7 @@ public abstract class Message {
         int[] data = new int[3 + getParams().length];
         data[0] = makeSigningValue(roundNum);
         data[1] = makeTargetValue(getRecipients(), getRecipientGoal());
-        data[2] = getMessageType().getId();
+        data[2] = getMessageType().id;
 
         for (int i = 0; i < getParams().length; i++) {
             data[i + 3] = getParams()[i];
@@ -87,10 +87,6 @@ public abstract class Message {
     // Make the signing value. This has as the least-significant 17 bits the SECRET_VALUE, and as the
     // most-significant 15 bits the round % MODULUS repeated 3 times.
     private static int makeSigningValue(int roundNum) {
-        if (MODULUS > 32) {
-            throw new IllegalArgumentException("Modulus can be at most 32");
-        }
-
         int hash = roundNum % MODULUS;
         return (((((hash << 5) + hash) << 5) + hash) << 17) + SECRET_VALUE;
     }

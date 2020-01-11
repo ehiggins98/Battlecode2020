@@ -15,6 +15,7 @@ public class HQ extends Robot {
         super(rc);
         minersBuilt = 0;
         goal = Goal.BUILD_INITIAL_MINERS;
+        myHQ = rc.getLocation();
     }
 
     @Override
