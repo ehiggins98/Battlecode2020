@@ -196,6 +196,9 @@ public class Landscaper extends Robot {
     // Find the direction in which to dig dirt while building the HQ wall. This will avoid destroying the wall
     // and won't dig other landscapers into a ditch.
     private Direction getDigDirection() throws GameActionException {
+        if (rc.canDigDirt(rc.getLocation().directionTo(myHQ))) {
+            return rc.getLocation().directionTo(myHQ);
+        }
         Direction perpendicular = myHQ.directionTo(rc.getLocation());
         Direction[] possibilities = new Direction[]{perpendicular, perpendicular.rotateLeft(), perpendicular.rotateLeft()};
 
