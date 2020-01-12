@@ -81,9 +81,12 @@ public class PathFinder {
      * @param tryDig Whether the pathfinder should try to dig if it hits a wall.
      * @return A value indicating whether we can move. This will be false only if the goal is unreachable.
      */
-    public boolean move(boolean tryDig) throws GameActionException {
+    public boolean move(boolean tryDig, boolean tryFly) throws GameActionException {
         if (tryDig && rc.getType() != RobotType.LANDSCAPER) {
             throw new IllegalArgumentException("Can't try to dig if unit is not landscaper");
+        }
+        if (tryFly && rc.getType() != RobotType.DELIVERY_DRONE) {
+            throw new IllegalArgumentException("Can't try to fly if unit is not drone");
         }
 
         boolean dig = false;
@@ -100,7 +103,7 @@ public class PathFinder {
         for (Direction d : Direction.allDirections()) {
             MapLocation newLoc = rc.getLocation().add(d);
             boolean diggingMightHelp = tryDig && diggingWouldFixBarrier(newLoc);
-            if ((rc.canMove(d) || diggingMightHelp) && !visited.contains(newLoc) && !rc.senseFlooding(rc.getLocation().add(d))) {
+            if ((rc.canMove(d) || diggingMightHelp) && !visited.contains(newLoc) && (tryFly || !rc.senseFlooding(rc.getLocation().add(d)))) {
                 double dist;
                 if ((dist = newLoc.distanceSquaredTo(goal)) < min) {
                     min = dist;

@@ -22,6 +22,12 @@ public strictfp class RobotPlayer {
                 case DESIGN_SCHOOL:
                     robot = new DesignSchool(rc);
                     break;
+                case FULFILLMENT_CENTER:
+                    robot = new FulfillmentCenter(rc);
+                    break;
+                case DELIVERY_DRONE:
+                    robot = new Drone(rc);
+                    break;
                 case LANDSCAPER:
                     robot = new Landscaper(rc);
                     break;

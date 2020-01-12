@@ -12,6 +12,7 @@ import jers.Transactor;
 
 import java.util.*;
 
+import static battlecode.common.RobotType.*;
 import static jers.Constants.INITIAL_ATTACKING_LANDSCAPERS;
 import static jers.Constants.LANDSCAPERS_FOR_WALL;
 
@@ -25,6 +26,7 @@ public class Miner extends Robot {
     private Transactor transactor;
     private MapLocation designSchoolLocation = null;
     private List<MapLocation> refineryLocations = null;
+    private List<MapLocation> fulfillmentLocations = null;
     private List<MapLocation> soupLocations = null;
     private List<RobotBuiltMessage> robotBuiltMessages;
     private HashSet<MapLocation> sharedSoupLocations;
@@ -38,6 +40,7 @@ public class Miner extends Robot {
         super(rc);
 
         refineryLocations = new ArrayList<>();
+        fulfillmentLocations = new ArrayList<>();
         pathFinder = new PathFinder(rc);
         transactor = new Transactor(rc);
         soupLocations = new ArrayList<>();
@@ -66,7 +69,6 @@ public class Miner extends Robot {
         allGoals(roundNum);
 
         do {
-            System.out.println(goal);
             switch (goal) {
                 case IDLE:
                     idle();
@@ -107,6 +109,9 @@ public class Miner extends Robot {
                         case DESIGN_SCHOOL:
                             designSchoolLocation = message.getRobotLocation();
                             break;
+                        case FULFILLMENT_CENTER:
+                            fulfillmentLocations.add(message.getRobotLocation());
+                            break;
                         case LANDSCAPER:
                             landscapersBuilt++;
                             break;
@@ -141,7 +146,7 @@ public class Miner extends Robot {
 
     // Execute the mine strategy - go to soup, mine it until we're full, then refine.
     private void mine() throws GameActionException {
-        pathFinder.move(false);
+        pathFinder.move(false, false);
 
         if (rc.getSoupCarrying() >= RobotType.MINER.soupLimit && rc.isReady()) {
             goal = Goal.REFINE;
@@ -174,7 +179,7 @@ public class Miner extends Robot {
 
     // Go to the HQ and dump all our soup in, then go back to mining.
     private void refine() throws GameActionException {
-        pathFinder.move(false);
+        pathFinder.move(false, false);
 
         for (MapLocation refinery : refineryLocations) {
             if (rc.getLocation().isAdjacentTo(refinery)) {
@@ -191,7 +196,7 @@ public class Miner extends Robot {
     // Walk semi-randomly around the map until we see soup. This just generates random goals at most MAX_EXPLORE_DELTA
     // tiles away from our current location and goes there. If there's no soup visible, it generates another goal.
     private void explore() throws GameActionException {
-        boolean success = pathFinder.move(false);
+        boolean success = pathFinder.move(false, false);
         if (!success || pathFinder.isFinished()) {
             pathFinder.setGoal(getRandomGoal());
         }
@@ -210,11 +215,11 @@ public class Miner extends Robot {
 
     // Go far enough away from the HQ and build a refinery.
     private void buildRefinery() throws GameActionException {
-        MapLocation builtAt = makeBuilding(RobotType.REFINERY);
+        MapLocation builtAt = makeBuilding(REFINERY);
         if (builtAt != null) {
             refineryLocations.add(builtAt);
             goal = rc.getSoupCarrying() >= RobotType.MINER.soupLimit ? Goal.REFINE : Goal.MINE;
-            robotBuiltMessages.add(new RobotBuiltMessage(new RobotType[]{RobotType.MINER}, Goal.ALL, builtAt, RobotType.REFINERY));
+            robotBuiltMessages.add(new RobotBuiltMessage(new RobotType[]{RobotType.MINER}, Goal.ALL, builtAt, REFINERY));
         }
     }
 
@@ -240,6 +245,10 @@ public class Miner extends Robot {
                             System.out.println("Found design school");
                             designSchoolLocation = message.getRobotLocation();
                             break;
+                        case FULFILLMENT_CENTER:
+                            System.out.println("Found fulfillment center");
+                            fulfillmentLocations.add(message.getRobotLocation());
+                            break;
                         case LANDSCAPER:
                             landscapersBuilt++;
                             break;
@@ -251,15 +260,23 @@ public class Miner extends Robot {
             }
         }
 
-        if (rc.getTeamSoup() > RobotType.REFINERY.cost && refineryLocations.size() == 1) {
+        if (rc.getTeamSoup() > REFINERY.cost && refineryLocations.size() == 1) {
             goal = Goal.BUILD_REFINERY;
         }
 
-        if (refineryLocations.size() > 1 && designSchoolLocation == null && rc.getTeamSoup() >= RobotType.DESIGN_SCHOOL.cost) {
-            MapLocation loc = makeBuilding(RobotType.DESIGN_SCHOOL);
+        if (refineryLocations.size() > 1 && designSchoolLocation == null && rc.getTeamSoup() >= DESIGN_SCHOOL.cost) {
+            MapLocation loc = makeBuilding(DESIGN_SCHOOL);
             if (loc != null) {
                 designSchoolLocation = loc;
-                robotBuiltMessages.add(new RobotBuiltMessage(new RobotType[]{RobotType.MINER, RobotType.HQ}, Goal.ALL, designSchoolLocation, RobotType.DESIGN_SCHOOL));
+                robotBuiltMessages.add(new RobotBuiltMessage(new RobotType[]{RobotType.MINER, RobotType.HQ}, Goal.ALL, designSchoolLocation, DESIGN_SCHOOL));
+            }
+        }
+
+        if (refineryLocations.size() > 1 && designSchoolLocation != null && fulfillmentLocations.size() < 1 && rc.getTeamSoup() >= FULFILLMENT_CENTER.cost)  {
+            MapLocation loc = makeBuilding(FULFILLMENT_CENTER);
+            if (loc != null) {
+                fulfillmentLocations.add(loc);
+                robotBuiltMessages.add(new RobotBuiltMessage(new RobotType[]{RobotType.MINER, RobotType.HQ}, Goal.ALL, loc, FULFILLMENT_CENTER));
             }
         }
 
@@ -359,10 +376,10 @@ public class Miner extends Robot {
         }
 
         if (rc.getLocation().distanceSquaredTo(closest) > FAR_THRESHOLD_RADIUS_SQUARED &&
-                rc.getTeamSoup() > RobotType.REFINERY.cost && landscapersBuilt >= INITIAL_ATTACKING_LANDSCAPERS + LANDSCAPERS_FOR_WALL) {
-            MapLocation builtAt = makeBuilding(RobotType.REFINERY);
+                rc.getTeamSoup() > REFINERY.cost && landscapersBuilt >= INITIAL_ATTACKING_LANDSCAPERS + LANDSCAPERS_FOR_WALL) {
+            MapLocation builtAt = makeBuilding(REFINERY);
             if (builtAt != null) {
-                robotBuiltMessages.add(new RobotBuiltMessage(new RobotType[]{RobotType.MINER}, Goal.ALL, builtAt, RobotType.REFINERY));
+                robotBuiltMessages.add(new RobotBuiltMessage(new RobotType[]{RobotType.MINER}, Goal.ALL, builtAt, REFINERY));
                 return builtAt;
             }
         }

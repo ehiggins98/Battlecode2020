@@ -6,10 +6,12 @@ import jers.Messages.RobotBuiltMessage;
 
 public class HQ extends Robot {
     private final int INITIAL_MINER_COUNT = 5;
+    private final int SECOND_MINER_COUNT = 12;
     private boolean buildMiner = true;
     private boolean locationBroadcast = false;
     private int minersBuilt;
     private RobotBuiltMessage robotBuiltMessage;
+
 
     public HQ(RobotController rc) throws GameActionException {
         super(rc);
@@ -63,6 +65,16 @@ public class HQ extends Robot {
 
         if (robotBuiltMessage != null && transactor.submitTransaction(robotBuiltMessage)) {
             robotBuiltMessage = null;
+        }
+
+        if (minersBuilt >= SECOND_MINER_COUNT) {
+            goal = Goal.BUILD_INITIAL_DRONES;
+        }
+    }
+
+    private void buildLandscapersAndDrones(int roundNum) throws GameActionException {
+        if (buildMiner) {
+            //MapLocation builtAt = makeRobot
         }
     }
 }

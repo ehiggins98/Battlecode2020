@@ -88,7 +88,7 @@ public class Landscaper extends Robot {
             }
         }
         if (rc.isReady()) {
-            pathFinder.move(true);
+            pathFinder.move(true, false);
         }
     }
 
@@ -112,7 +112,7 @@ public class Landscaper extends Robot {
         }
 
         if (rc.isReady()) {
-            pathFinder.move(false);
+            pathFinder.move(false, false);
         }
     }
 
