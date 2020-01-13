@@ -37,8 +37,11 @@ public class Landscaper extends Robot {
             goal = checkInitialGoal(rc.getLocation(), roundNum);
         }
 
+        Goal lastGoal = null;
+
         // Without the while loop we waste turns changing goals
-        while (rc.isReady() && goal != null && goal != Goal.IDLE) {
+        while (rc.isReady() && goal != null && goal != Goal.IDLE && lastGoal != goal) {
+            lastGoal = goal;
             switch (goal) {
                 case IDLE:
                     break;

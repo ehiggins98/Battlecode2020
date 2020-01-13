@@ -68,7 +68,10 @@ public class Miner extends Robot {
         }
         allGoals(roundNum);
 
-        do {
+        Goal lastGoal = null;
+
+        while (rc.isReady() && lastGoal != goal) {
+            lastGoal = goal;
             switch (goal) {
                 case IDLE:
                     idle();
@@ -88,7 +91,7 @@ public class Miner extends Robot {
                 default:
                     throw new IllegalStateException("Invalid goal for miner " + goal);
             }
-        } while (rc.isReady() && goal != Goal.BUILD_REFINERY);
+        }
     }
 
     private void startUp(int roundNum) throws GameActionException {
@@ -236,15 +239,18 @@ public class Miner extends Robot {
                             refineryLocations.add(myHQ);
                             break;
                         case REFINERY:
+                            System.out.println("Found refinery");
                             refineryLocations.add(message.getRobotLocation());
                             if (goal == Goal.BUILD_REFINERY) {
                                 goal = Goal.IDLE;
                             }
                             break;
                         case DESIGN_SCHOOL:
+                            System.out.println("Found design school");
                             designSchoolLocation = message.getRobotLocation();
                             break;
                         case FULFILLMENT_CENTER:
+                            System.out.println("Found fulfillment center");
                             fulfillmentLocations.add(message.getRobotLocation());
                             break;
                         case LANDSCAPER:

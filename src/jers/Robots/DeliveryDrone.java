@@ -35,16 +35,24 @@ public class DeliveryDrone extends Robot {
     public void run(int roundNum) throws GameActionException {
         if (goal == Goal.STARTUP) {
             startup(roundNum);
+            if (goal == Goal.STARTUP) {
+                return;
+            }
         }
 
+        Goal lastGoal = null;
+
         // Without the while loop we waste turns changing goals
-        while (rc.isReady() && goal != null && goal != Goal.IDLE && goal != Goal.STARTUP) {
+        while(rc.isReady() && goal != null && lastGoal != goal) {
+            lastGoal = goal;
             MapLocation water = checkWater();
             if (water != null) {
                 waterLocations.add(water);
                 waterFoundMessages.add(new WaterFoundMessage(new RobotType[]{RobotType.DELIVERY_DRONE}, Goal.ALL, water));
             }
             switch (goal) {
+                case IDLE:
+                    break;
                 case GET_INITIAL_GOAL:
                     interactWithBlockchain(roundNum);
                     break;
@@ -167,13 +175,10 @@ public class DeliveryDrone extends Robot {
             }
         }
 
-        if (robotToAttack == null) {
-            goal = Goal.GO_TO_ENEMY_HQ;
-            return;
+        if (robotToAttack != null) {
+            target_id = robotToAttack.ID;
+            goal = Goal.PICK_UP_UNIT;
         }
-
-        target_id = robotToAttack.ID;
-        goal = Goal.PICK_UP_UNIT;
     }
 
     private void defendHQ() throws GameActionException {
@@ -191,14 +196,10 @@ public class DeliveryDrone extends Robot {
                 robotToAttack = robot;
             }
         }
-
-        if (robotToAttack == null) {
-            goal = Goal.GO_TO_MY_HQ;
-            return;
+        if (robotToAttack != null) {
+            target_id = robotToAttack.ID;
+            goal = Goal.PICK_UP_UNIT;
         }
-
-        target_id = robotToAttack.ID;
-        goal = Goal.PICK_UP_UNIT;
     }
 
     private void pickUpUnit() throws GameActionException {
@@ -255,7 +256,10 @@ public class DeliveryDrone extends Robot {
             rc.dropUnit(dropDirection);
             goal = Goal.GO_TO_ENEMY_HQ;
         } else {
-            pathFinder.move(false, true);
+            boolean success = pathFinder.move(false, true);
+            if (!success) {
+                System.out.println(success);
+            }
         }
     }
 

@@ -102,8 +102,9 @@ public class PathFinder {
 
         for (Direction d : Direction.allDirections()) {
             MapLocation newLoc = rc.getLocation().add(d);
-            boolean diggingMightHelp = tryDig && diggingWouldFixBarrier(newLoc);
-            if ((rc.canMove(d) || diggingMightHelp) && !visited.contains(newLoc) && (tryFly || !rc.senseFlooding(rc.getLocation().add(d)))) {
+            boolean diggingMightHelp = tryDig && isWall(newLoc);
+
+            if ((rc.canMove(d) || ((tryDig || tryFly) && isWall(newLoc))) && !visited.contains(newLoc) && (tryFly || !rc.senseFlooding(rc.getLocation().add(d)))) {
                 double dist;
                 if ((dist = newLoc.distanceSquaredTo(goal)) < min) {
                     min = dist;
@@ -147,7 +148,7 @@ public class PathFinder {
     }
 
     // Get a value indicating whether digging would allow us to pass a barrier
-    private boolean diggingWouldFixBarrier(MapLocation newLoc) throws GameActionException {
+    private boolean isWall(MapLocation newLoc) throws GameActionException {
         return rc.isReady() && rc.canSenseLocation(newLoc) && !rc.isLocationOccupied(newLoc) && Math.abs(rc.senseElevation(newLoc) - rc.senseElevation(rc.getLocation())) > GameConstants.MAX_DIRT_DIFFERENCE;
     }
 
