@@ -66,9 +66,10 @@ public class Miner extends Robot {
                 return;
             }
         }
-        allGoals(roundNum);
 
         Goal lastGoal = null;
+        readBlockchain(roundNum);
+        makeBuildings();
 
         while (rc.isReady() && lastGoal != goal) {
             System.out.println(goal);
@@ -93,6 +94,8 @@ public class Miner extends Robot {
                     throw new IllegalStateException("Invalid goal for miner " + goal);
             }
         }
+
+        writeBlockchain();
     }
 
     private void startUp(int roundNum) throws GameActionException {
@@ -229,8 +232,31 @@ public class Miner extends Robot {
         }
     }
 
+    // Checks whether we need to build a building, and builds one if we do.
+    private void makeBuildings() throws GameActionException {
+        if (rc.getTeamSoup() > REFINERY.cost && refineryLocations.size() == 1) {
+            goal = Goal.BUILD_REFINERY;
+        }
+
+        if (refineryLocations.size() > 1 && designSchoolLocation == null && rc.getTeamSoup() >= DESIGN_SCHOOL.cost) {
+            MapLocation loc = makeBuilding(DESIGN_SCHOOL);
+            if (loc != null) {
+                designSchoolLocation = loc;
+                robotBuiltMessages.add(new RobotBuiltMessage(new RobotType[]{RobotType.MINER, RobotType.HQ}, Goal.ALL, designSchoolLocation, DESIGN_SCHOOL));
+            }
+        }
+
+        if (refineryLocations.size() > 1 && designSchoolLocation != null && fulfillmentLocations.size() < 1 && rc.getTeamSoup() >= FULFILLMENT_CENTER.cost)  {
+            MapLocation loc = makeBuilding(FULFILLMENT_CENTER);
+            if (loc != null) {
+                fulfillmentLocations.add(loc);
+                robotBuiltMessages.add(new RobotBuiltMessage(new RobotType[]{RobotType.MINER, RobotType.HQ}, Goal.ALL, loc, FULFILLMENT_CENTER));
+            }
+        }
+    }
+
     // Stuff that needs to be done regardless of our goal.
-    private void allGoals(int roundNum) throws GameActionException {
+    private void readBlockchain(int roundNum) throws GameActionException {
         ArrayList<Message> messages = transactor.getBlock(roundNum - 1, goal);
         for (Message m : messages) {
             switch (m.getMessageType()) {
@@ -266,27 +292,9 @@ public class Miner extends Robot {
                     break;
             }
         }
+    }
 
-        if (rc.getTeamSoup() > REFINERY.cost && refineryLocations.size() == 1) {
-            goal = Goal.BUILD_REFINERY;
-        }
-
-        if (refineryLocations.size() > 1 && designSchoolLocation == null && rc.getTeamSoup() >= DESIGN_SCHOOL.cost) {
-            MapLocation loc = makeBuilding(DESIGN_SCHOOL);
-            if (loc != null) {
-                designSchoolLocation = loc;
-                robotBuiltMessages.add(new RobotBuiltMessage(new RobotType[]{RobotType.MINER, RobotType.HQ}, Goal.ALL, designSchoolLocation, DESIGN_SCHOOL));
-            }
-        }
-
-        if (refineryLocations.size() > 1 && designSchoolLocation != null && fulfillmentLocations.size() < 1 && rc.getTeamSoup() >= FULFILLMENT_CENTER.cost)  {
-            MapLocation loc = makeBuilding(FULFILLMENT_CENTER);
-            if (loc != null) {
-                fulfillmentLocations.add(loc);
-                robotBuiltMessages.add(new RobotBuiltMessage(new RobotType[]{RobotType.MINER, RobotType.HQ}, Goal.ALL, loc, FULFILLMENT_CENTER));
-            }
-        }
-
+    private void writeBlockchain() throws GameActionException {
         if (!robotBuiltMessages.isEmpty()) {
             boolean success = transactor.submitTransaction(robotBuiltMessages.get(0));
             if (success) {
