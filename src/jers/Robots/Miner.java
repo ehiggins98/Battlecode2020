@@ -48,7 +48,6 @@ public class Miner extends Robot {
         sharedSoupLocations = new HashSet<>();
         random = new Random();
         goal = Goal.STARTUP;
-        System.out.println("New miner");
     }
 
     /**
@@ -245,7 +244,8 @@ public class Miner extends Robot {
             }
         }
 
-        if (refineryLocations.size() > 1 && designSchoolLocation != null && fulfillmentLocations.size() < 1 && rc.getTeamSoup() >= FULFILLMENT_CENTER.cost)  {
+        if (refineryLocations.size() > 1 && designSchoolLocation != null && fulfillmentLocations.size() < 1 &&
+                rc.getTeamSoup() >= FULFILLMENT_CENTER.cost && landscapersBuilt >= INITIAL_ATTACKING_LANDSCAPERS + LANDSCAPERS_FOR_WALL)  {
             MapLocation loc = makeBuilding(FULFILLMENT_CENTER);
             if (loc != null) {
                 fulfillmentLocations.add(loc);
@@ -267,18 +267,15 @@ public class Miner extends Robot {
                             refineryLocations.add(myHQ);
                             break;
                         case REFINERY:
-                            System.out.println("Found refinery");
                             refineryLocations.add(message.getRobotLocation());
                             if (goal == Goal.BUILD_REFINERY) {
                                 goal = Goal.IDLE;
                             }
                             break;
                         case DESIGN_SCHOOL:
-                            System.out.println("Found design school");
                             designSchoolLocation = message.getRobotLocation();
                             break;
                         case FULFILLMENT_CENTER:
-                            System.out.println("Found fulfillment center");
                             fulfillmentLocations.add(message.getRobotLocation());
                             break;
                         case LANDSCAPER:
@@ -297,7 +294,6 @@ public class Miner extends Robot {
         if (!robotBuiltMessages.isEmpty()) {
             boolean success = transactor.submitTransaction(robotBuiltMessages.get(0));
             if (success) {
-                System.out.println(robotBuiltMessages.get(0).getRobotType() + " built at " + robotBuiltMessages.get(0).getRobotLocation());
                 robotBuiltMessages.remove(0);
             }
         }
@@ -318,7 +314,6 @@ public class Miner extends Robot {
             MapLocation buildAt = rc.getLocation().add(d);
             if (rc.canBuildRobot(type, d) && !rc.senseFlooding(buildAt) && rc.senseSoup(buildAt) == 0 && buildAt.distanceSquaredTo(myHQ) >= 9) {
                 rc.buildRobot(type, d);
-                System.out.println(type + " built at " + buildAt);
                 return buildAt;
             }
         }

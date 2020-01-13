@@ -47,7 +47,6 @@ public class FulfillmentCenter extends Robot {
      * @throws GameActionException
      */
     public void buildInitialDrones(int roundNum) throws GameActionException {
-
         if (rc.isReady() && rc.getTeamSoup() > RobotType.DELIVERY_DRONE.cost) {
             MapLocation builtAt = makeRobot(RobotType.DELIVERY_DRONE);
             if (builtAt == null) {
@@ -60,13 +59,12 @@ public class FulfillmentCenter extends Robot {
         }
 
         if (initialGoalMessage != null && transactor.submitTransaction(initialGoalMessage)) {
-            System.out.println(("Told a drone to find the base"));
             initialGoalMessage = null;
         }
 
-        if (dronesBuilt > INITIAL_ATTACKING_DRONES + INITIAL_DEFENDING_DRONES) {
-            goal = Goal.IDLE;
-            buildDrone = false;
+        if (dronesBuilt >= INITIAL_ATTACKING_DRONES + INITIAL_DEFENDING_DRONES) {
+            goal = Goal.BUILD_LANDSCAPERS_AND_DRONES;
+            buildDrone = true;
         }
     }
     /**
@@ -76,20 +74,20 @@ public class FulfillmentCenter extends Robot {
      * @throws GameActionException
      */
     public void buildLandscapersAndDrones(int roundNum) throws GameActionException {
-        MapLocation locationOfPreviousLandscaper = checkRobotBuiltInRound(roundNum - 1, RobotType.LANDSCAPER);
-        if (buildDrone && dronesBuilt < INITIAL_ATTACKING_DRONES + INITIAL_DEFENDING_DRONES + DRONE_LANDSCAPER_PAIRS) {
+        if (buildDrone) {
             MapLocation builtAt = makeRobot(RobotType.DELIVERY_DRONE);
             if (builtAt == null) {
                 return;
             }
+            System.out.println("Built a drone");
 
             buildDrone = false;
             dronesBuilt += 1;
-            /*initialGoalMessage = new InitialGoalMessage(new RobotType[]{RobotType.DELIVERY_DRONE},
-                    Goal.ALL, builtAt, roundNum, Goal.ATTACK_ENEMY_HQ);*/
-            robotBuiltMessage = new RobotBuiltMessage(new RobotType[]{RobotType.HQ, RobotType.MINER},
+            initialGoalMessage = new InitialGoalMessage(new RobotType[]{RobotType.DELIVERY_DRONE},
+                    Goal.ALL, builtAt, roundNum, Goal.FIND_ENEMY_HQ);
+            robotBuiltMessage = new RobotBuiltMessage(new RobotType[]{RobotType.HQ, RobotType.DESIGN_SCHOOL},
                     Goal.ALL, builtAt, RobotType.DELIVERY_DRONE);
-        } else if (!buildDrone && checkRobotBuiltInRound(roundNum - 1, RobotType.LANDSCAPER) != null) {
+        } else if (checkRobotBuiltInRound(roundNum - 1, RobotType.LANDSCAPER) != null) {
             buildDrone = true;
         }
 

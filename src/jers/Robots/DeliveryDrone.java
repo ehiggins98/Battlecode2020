@@ -117,7 +117,6 @@ public class DeliveryDrone extends Robot {
     private void startup(int roundNum) throws GameActionException {
         if (startupLastRoundChecked >= roundNum - 2) {
             goal = initialGoal != null ? initialGoal : Goal.GET_INITIAL_GOAL;
-            System.out.println(initialGoal);
             return;
         }
 
@@ -216,7 +215,6 @@ public class DeliveryDrone extends Robot {
             );
 
             pathFinder.setGoal(newGoal);
-            System.out.println("Set goal to " + newGoal);
         }
 
         pathFinder.move(false, true);
@@ -233,8 +231,6 @@ public class DeliveryDrone extends Robot {
         if (rc.isReady()) {
             pathFinder.move(false, true);
             if (pathFinder.isFinished()) {
-                //TODO: Drone will see unit picked up by other drone and try to follow it
-                // We need to figure out if the target is being carried by a drone before other drone is adjacent.
                 if (pickedUpUnits.contains(target_id) || !rc.canPickUpUnit(target_id)) {
                     goal = Goal.GO_TO_ENEMY_HQ;
                     return;

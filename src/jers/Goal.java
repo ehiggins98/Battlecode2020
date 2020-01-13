@@ -21,7 +21,7 @@ public enum Goal {
     GO_TO_ENEMY_HQ(19), // Drone
     FIND_WATER(20), // Drone
     GET_INITIAL_GOAL(21), // Drone
-    ROAM_AROUND(22), //Drone
+    ROAM_AROUND(22), // Drone
     ALL(23);
 
     private final int id;

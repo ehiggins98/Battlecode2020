@@ -1,6 +1,7 @@
 package jers.Robots;
 
 import battlecode.common.*;
+import jers.Constants;
 import jers.Goal;
 import jers.Messages.RobotBuiltMessage;
 
@@ -27,6 +28,8 @@ public class HQ extends Robot {
         }
 
         switch (goal) {
+            case IDLE:
+                break;
             case BUILD_INITIAL_MINERS:
                 buildInitialMiners();
                 break;
@@ -59,6 +62,10 @@ public class HQ extends Robot {
             buildMiner = false;
             minersBuilt += 1;
             robotBuiltMessage = new RobotBuiltMessage(new RobotType[]{RobotType.DESIGN_SCHOOL}, Goal.BUILD_LANDSCAPERS_AND_MINERS, builtAt, RobotType.MINER);
+
+            if (minersBuilt >= Constants.LANDSCAPERS_FOR_WALL + Constants.INITIAL_ATTACKING_LANDSCAPERS + INITIAL_MINER_COUNT) {
+                goal = Goal.IDLE;
+            }
         } else if (checkRobotBuiltInRound(roundNum - 1, RobotType.LANDSCAPER) != null) {
             buildMiner = true;
         }
