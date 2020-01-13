@@ -3,10 +3,7 @@ package jers.Robots;
 import battlecode.common.*;
 import jers.Constants;
 import jers.Goal;
-import jers.Messages.Message;
-import jers.Messages.MessageType;
-import jers.Messages.RobotBuiltMessage;
-import jers.Messages.SoupFoundMessage;
+import jers.Messages.*;
 import jers.PathFinder;
 import jers.Transactor;
 
@@ -17,11 +14,6 @@ import static jers.Constants.INITIAL_ATTACKING_LANDSCAPERS;
 import static jers.Constants.LANDSCAPERS_FOR_WALL;
 
 public class Miner extends Robot {
-    // Distance needed to be considered "far" from HQ. We broadcast soup locations
-    // if found beyond this distance, and build a refinery if soup is found at least
-    // this far from HQ.
-    private final int FAR_THRESHOLD_RADIUS_SQUARED = 25;
-
     private PathFinder pathFinder;
     private Transactor transactor;
     private MapLocation designSchoolLocation = null;
@@ -29,6 +21,7 @@ public class Miner extends Robot {
     private List<MapLocation> fulfillmentLocations = null;
     private List<MapLocation> soupLocations = null;
     private List<RobotBuiltMessage> robotBuiltMessages;
+    private NeedRefineryMessage needRefineryMessage;
     private HashSet<MapLocation> sharedSoupLocations;
     private Random random;
     private int landscapersBuilt;
@@ -151,7 +144,7 @@ public class Miner extends Robot {
 
     // Execute the mine strategy - go to soup, mine it until we're full, then refine.
     private void mine() throws GameActionException {
-        pathFinder.move(false, false);
+        pathFinder.move(false, false, myHQ);
 
         if (rc.getSoupCarrying() >= RobotType.MINER.soupLimit && rc.isReady()) {
             goal = Goal.REFINE;
@@ -171,11 +164,8 @@ public class Miner extends Robot {
                 }
 
                 rc.mineSoup(rc.getLocation().directionTo(soupLocations.get(0)));
-                if (!rc.getLocation().equals(soupLocations.get(0))) {
-                    rc.setIndicatorLine(rc.getLocation(), soupLocations.get(0), 0, 0, 255);
-                } else {
-                    rc.setIndicatorDot(rc.getLocation(), 0, 0, 255);
-                }
+            } else {
+                goal = Goal.IDLE;
             }
         }
     }
@@ -195,15 +185,17 @@ public class Miner extends Robot {
 
         if (pathFinder.getGoal() == null || pathFinder.isFinished()) {
             MapLocation refinery = findOrBuildRefinery();
-            pathFinder.setGoal(getOpenTileAdjacent(refinery, refinery.directionTo(rc.getLocation()), Constants.directions, false));
+            if (refinery != null) {
+                pathFinder.setGoal(getOpenTileAdjacent(refinery, refinery.directionTo(rc.getLocation()), Constants.directions, false));
+            }
         }
-        pathFinder.move(false, false);
+        pathFinder.move(false, false, myHQ);
     }
 
     // Walk semi-randomly around the map until we see soup. This just generates random goals at most MAX_EXPLORE_DELTA
     // tiles away from our current location and goes there. If there's no soup visible, it generates another goal.
     private void explore() throws GameActionException {
-        boolean success = pathFinder.move(false, false);
+        boolean success = pathFinder.move(false, false, myHQ);
         if (!success || pathFinder.isFinished()) {
             pathFinder.setGoal(getRandomGoal());
         }
@@ -305,6 +297,10 @@ public class Miner extends Robot {
                 soupFoundTransactionNeeded = !transactor.submitTransaction(new SoupFoundMessage(new RobotType[]{RobotType.MINER}, Goal.ALL, soupLocations.get(0)));
             }
         }
+
+        if (needRefineryMessage != null && transactor.submitTransaction(needRefineryMessage)) {
+            needRefineryMessage = null;
+        }
     }
 
     // Make a building. This ensures we don't put the building in water, that it's not on top of soup, and that it's far enough away
@@ -384,12 +380,16 @@ public class Miner extends Robot {
             }
         }
 
-        if (rc.getLocation().distanceSquaredTo(closest) > FAR_THRESHOLD_RADIUS_SQUARED &&
-                rc.getTeamSoup() > REFINERY.cost && landscapersBuilt >= INITIAL_ATTACKING_LANDSCAPERS + LANDSCAPERS_FOR_WALL) {
-            MapLocation builtAt = makeBuilding(REFINERY);
-            if (builtAt != null) {
-                robotBuiltMessages.add(new RobotBuiltMessage(new RobotType[]{RobotType.MINER}, Goal.ALL, builtAt, REFINERY));
-                return builtAt;
+        if (rc.getLocation().distanceSquaredTo(closest) > Constants.FAR_THRESHOLD_RADIUS_SQUARED &&
+                landscapersBuilt >= INITIAL_ATTACKING_LANDSCAPERS + LANDSCAPERS_FOR_WALL) {
+            if (rc.getTeamSoup() < REFINERY.cost) {
+                needRefineryMessage = new NeedRefineryMessage(new RobotType[]{DESIGN_SCHOOL, FULFILLMENT_CENTER}, Goal.ALL);
+            } else {
+                MapLocation builtAt = makeBuilding(REFINERY);
+                if (builtAt != null) {
+                    robotBuiltMessages.add(new RobotBuiltMessage(new RobotType[]{RobotType.MINER}, Goal.ALL, builtAt, REFINERY));
+                    return builtAt;
+                }
             }
         }
 
@@ -398,7 +398,7 @@ public class Miner extends Robot {
 
     private boolean farFromAllSharedSoup(MapLocation soupLoc) {
         for (MapLocation soup : sharedSoupLocations) {
-            if (soupLoc.distanceSquaredTo(soup) <= FAR_THRESHOLD_RADIUS_SQUARED) {
+            if (soupLoc.distanceSquaredTo(soup) <= Constants.FAR_THRESHOLD_RADIUS_SQUARED) {
                 return false;
             }
         }

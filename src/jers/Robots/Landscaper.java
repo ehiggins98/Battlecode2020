@@ -3,11 +3,10 @@ package jers.Robots;
 import battlecode.common.*;
 import jers.Constants;
 import jers.Goal;
+import jers.Messages.*;
 import jers.PathFinder;
 
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashSet;
 
 public class Landscaper extends Robot {
     // Map is rotationally, horizontally, or vertically symmetric, so we don't know for sure where the HQ is.
@@ -16,6 +15,9 @@ public class Landscaper extends Robot {
     private MapLocation theirHQ;
     private PathFinder pathFinder;
     private Direction depositDirection = Direction.CENTER;
+    private HqFoundMessage hqFoundMessage;
+    private int startupLastRoundChecked;
+    private Goal initialGoal;
 
     public Landscaper(RobotController rc) throws GameActionException {
         super(rc);
@@ -23,6 +25,7 @@ public class Landscaper extends Robot {
         theirHQPossibilities = calculateEnemyHQLocations(myHQ);
         hqTry = 0;
         pathFinder = new PathFinder(rc);
+        goal = Goal.STARTUP;
     }
 
     /**
@@ -33,20 +36,27 @@ public class Landscaper extends Robot {
      */
     @Override
     public void run(int roundNum) throws GameActionException {
-        if ((goal == null || goal == Goal.IDLE) && roundNum - createdOnRound < GameConstants.INITIAL_COOLDOWN_TURNS) {
-            goal = checkInitialGoal(rc.getLocation(), roundNum);
+        if (goal == Goal.STARTUP) {
+            startUp(roundNum);
+            if (goal == Goal.STARTUP) {
+                return;
+            }
         }
 
         Goal lastGoal = null;
-
+        readBlockchain(roundNum);
         // Without the while loop we waste turns changing goals
         while (rc.isReady() && goal != null && goal != Goal.IDLE && lastGoal != goal) {
             lastGoal = goal;
             switch (goal) {
                 case IDLE:
+                case GET_INITIAL_GOAL:
                     break;
                 case FIND_ENEMY_HQ:
                     findEnemyHQ();
+                    break;
+                case GO_TO_ENEMY_HQ:
+                    goToEnemyHQ();
                     break;
                 case ATTACK_ENEMY_HQ:
                     attackEnemyHQ();
@@ -61,12 +71,44 @@ public class Landscaper extends Robot {
                     throw new IllegalStateException("Invalid goal for landscaper " + goal);
             }
         }
+
+        writeBlockchain();
+    }
+
+    private void startUp(int roundNum) throws GameActionException {
+        if (startupLastRoundChecked >= roundNum - 2) {
+            goal = initialGoal != null ? initialGoal : Goal.GET_INITIAL_GOAL;
+            return;
+        }
+
+        while (startupLastRoundChecked < roundNum - 1 && Clock.getBytecodesLeft() > 600) {
+            ArrayList<Message> messages = transactor.getBlock(++startupLastRoundChecked, goal);
+            for (Message m : messages) {
+                switch (m.getMessageType()) {
+                    case HQ_FOUND:
+                        theirHQ = ((HqFoundMessage) m).getLocation();
+                        break;
+                    case INITIAL_GOAL:
+                        InitialGoalMessage initialGoalMessage = (InitialGoalMessage) m;
+                        if (initialGoalMessage.getRoundCreated() == createdOnRound &&
+                                initialGoalMessage.getInitialLocation().equals(rc.getLocation())) {
+                            initialGoal = initialGoalMessage.getInitialGoal();
+                        }
+                        break;
+                }
+            }
+        }
     }
 
     // Find the enemy HQ. We know the map is horizontally, vertically, or rotationally symmetric, so we have only
     // three locations where it can be. Thus, we try these possibilities until we find the HQ, then switch to
     // the attack goal.
     private void findEnemyHQ() throws GameActionException {
+        if (theirHQ != null) {
+            goal = Goal.GO_TO_ENEMY_HQ;
+            return;
+        }
+
         if (pathFinder.getGoal() == null || (pathFinder.isFinished() && !canSeeEnemyHQ())) {
             if (hqTry < 3) {
                 pathFinder.setGoal(theirHQPossibilities[hqTry].subtract(rc.getLocation().directionTo(theirHQPossibilities[hqTry])));
@@ -79,6 +121,8 @@ public class Landscaper extends Robot {
             if (rc.getLocation().isAdjacentTo(theirHQPossibilities[hqTry - 1])) {
                 goal = Goal.ATTACK_ENEMY_HQ;
                 theirHQ = theirHQPossibilities[hqTry-1];
+                hqFoundMessage = new HqFoundMessage(new RobotType[]{RobotType.LANDSCAPER, RobotType.DELIVERY_DRONE,
+                        RobotType.FULFILLMENT_CENTER, RobotType.DESIGN_SCHOOL}, Goal.ALL, theirHQ);
             } else {
                 MapLocation newGoal = getOpenTileAdjacent(theirHQPossibilities[hqTry-1],
                         theirHQPossibilities[hqTry-1].directionTo(rc.getLocation()), Constants.directions, false);
@@ -91,23 +135,23 @@ public class Landscaper extends Robot {
             }
         }
         if (rc.isReady()) {
-            pathFinder.move(true, false);
+            pathFinder.move(true, false, myHQ);
         }
     }
 
     // Try to bury the enemy HQ.
     private void attackEnemyHQ() throws GameActionException {
-        /*Direction hqDir = rc.getLocation().directionTo(theirHQ);
+        Direction hqDir = rc.getLocation().directionTo(theirHQ);
         if (rc.canDepositDirt(hqDir)) {
             rc.depositDirt(hqDir);
         } else if (rc.canDigDirt(Direction.CENTER)) {
             rc.digDirt(Direction.CENTER);
-        }*/
+        }
     }
 
     // For defensive landscapers, go to our HQ. Since we have 4 landscapers building the wall, they stand at the
     // cardinal directions and build 2 tiles of the wall.
-    private void goToMyHQ() throws GameActionException { ;
+    private void goToMyHQ() throws GameActionException {
         if (pathFinder.getGoal() == null || pathFinder.isFailed()) {
             pathFinder.setGoal(getOpenTileAdjacent(myHQ, myHQ.directionTo(rc.getLocation()), Constants.cardinalDirections, false));
         } else if (pathFinder.isFinished()) {
@@ -115,8 +159,24 @@ public class Landscaper extends Robot {
         }
 
         if (rc.isReady()) {
-            pathFinder.move(false, false);
+            pathFinder.move(false, false, myHQ);
         }
+    }
+
+    private void goToEnemyHQ() throws GameActionException {
+        boolean nearHQ = canSeeEnemyHQ();
+        if (!theirHQ.equals(pathFinder.getGoal()) && !canSeeEnemyHQ()) {
+            pathFinder.setGoal(theirHQ);
+        } else if (!pathFinder.isFinished() && nearHQ) {
+            MapLocation goal = getOpenTileAdjacent(theirHQ, theirHQ.directionTo(rc.getLocation()), Constants.directions, false);
+            if (goal != null) {
+                pathFinder.setGoal(goal);
+            }
+        } else if (nearHQ) {
+            goal = Goal.ATTACK_ENEMY_HQ;
+        }
+
+        pathFinder.move(true, false, myHQ);
     }
 
     // Build the wall. Each landscaper handles 2 tiles.
@@ -214,5 +274,31 @@ public class Landscaper extends Robot {
         }
 
         return null;
+    }
+
+    private void readBlockchain(int roundNum) throws GameActionException {
+        ArrayList<Message> messages = transactor.getBlock(roundNum - 1, goal);
+        for (Message m : messages) {
+            switch (m.getMessageType()) {
+                case HQ_FOUND:
+                    theirHQ = ((HqFoundMessage) m).getLocation();
+                    break;
+                case INITIAL_GOAL:
+                    InitialGoalMessage initialGoalMessage = (InitialGoalMessage) m;
+                    if (initialGoalMessage.getRoundCreated() == createdOnRound &&
+                            initialGoalMessage.getInitialLocation().equals(rc.getLocation())) {
+                        initialGoal = initialGoalMessage.getInitialGoal();
+                        goal = initialGoal;
+                    }
+                    break;
+            }
+        }
+    }
+
+    private void writeBlockchain() throws GameActionException {
+        if (hqFoundMessage != null) {
+            transactor.submitTransaction(hqFoundMessage);
+            hqFoundMessage = null;
+        }
     }
 }

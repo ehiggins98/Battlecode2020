@@ -15,6 +15,10 @@ public class UnitPickedUpMessage extends Message {
         this.unitId = unitId;
     }
 
+    public UnitPickedUpMessage(int[] data, int index) {
+        unitId = data[index];
+    }
+
     @Override
     public MessageType getMessageType() {
         return MessageType.UNIT_PICKED_UP;

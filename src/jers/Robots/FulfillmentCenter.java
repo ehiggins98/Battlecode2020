@@ -6,7 +6,11 @@ import battlecode.common.RobotController;
 import battlecode.common.RobotType;
 import jers.Goal;
 import jers.Messages.InitialGoalMessage;
+import jers.Messages.Message;
+import jers.Messages.MessageType;
 import jers.Messages.RobotBuiltMessage;
+
+import java.util.ArrayList;
 
 import static jers.Constants.*;
 
@@ -16,6 +20,8 @@ public class FulfillmentCenter extends Robot {
     private boolean buildDrone;
     private InitialGoalMessage initialGoalMessage;
     private RobotBuiltMessage robotBuiltMessage;
+    private boolean refineryNeeded = true;
+    private int roundsWithSoup = 0;
 
     public FulfillmentCenter(RobotController rc) throws GameActionException {
         super(rc);
@@ -28,6 +34,22 @@ public class FulfillmentCenter extends Robot {
 
     @Override
     public void run(int roundNum) throws GameActionException {
+        readBlockchain(roundNum);
+
+        if (rc.getTeamSoup() >= RobotType.REFINERY.cost) {
+            roundsWithSoup++;
+        }
+
+        if (roundsWithSoup >= 2) {
+            refineryNeeded = false;
+            roundsWithSoup = 0;
+        } else if (refineryNeeded) {
+            if (checkRobotBuiltInRound(roundNum - 1, RobotType.LANDSCAPER) != null) {
+                buildDrone = true;
+            }
+            return;
+        }
+
         switch (goal) {
             case IDLE:
                 break;
@@ -52,7 +74,6 @@ public class FulfillmentCenter extends Robot {
             if (builtAt == null) {
                 return;
             }
-
             dronesBuilt += 1;
             initialGoalMessage = new InitialGoalMessage(new RobotType[]{RobotType.DELIVERY_DRONE},
                     Goal.ALL, builtAt, roundNum, dronesBuilt > INITIAL_ATTACKING_DRONES ? Goal.FIND_ENEMY_HQ : Goal.GO_TO_MY_HQ);
@@ -79,7 +100,6 @@ public class FulfillmentCenter extends Robot {
             if (builtAt == null) {
                 return;
             }
-            System.out.println("Built a drone");
 
             buildDrone = false;
             dronesBuilt += 1;
@@ -97,6 +117,16 @@ public class FulfillmentCenter extends Robot {
 
         if (robotBuiltMessage != null && transactor.submitTransaction(robotBuiltMessage)) {
             robotBuiltMessage = null;
+        }
+    }
+
+    private void readBlockchain(int roundNum) throws GameActionException {
+        ArrayList<Message> messages = transactor.getBlock(roundNum - 1, goal);
+        for (Message m : messages) {
+            if (m.getMessageType() == MessageType.REFINERY_NEEDED) {
+                refineryNeeded = true;
+                break;
+            }
         }
     }
 }

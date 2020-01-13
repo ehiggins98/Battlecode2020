@@ -7,7 +7,11 @@ import battlecode.common.RobotType;
 import jers.Constants;
 import jers.Goal;
 import jers.Messages.InitialGoalMessage;
+import jers.Messages.Message;
+import jers.Messages.MessageType;
 import jers.Messages.RobotBuiltMessage;
+
+import java.util.ArrayList;
 
 import static jers.Constants.INITIAL_ATTACKING_LANDSCAPERS;
 import static jers.Constants.LANDSCAPERS_FOR_WALL;
@@ -19,6 +23,8 @@ public class DesignSchool extends Robot {
     private InitialGoalMessage initialGoalMessage;
     private RobotBuiltMessage robotBuiltMessage;
     private RobotType otherUnit;
+    private boolean refineryNeeded = false;
+    private int turnsWithSoup = 0;
 
     public DesignSchool(RobotController rc) throws GameActionException {
         super(rc);
@@ -37,6 +43,22 @@ public class DesignSchool extends Robot {
      */
     @Override
     public void run(int roundNum) throws GameActionException {
+        readBlockchain(roundNum);
+
+        if (rc.getTeamSoup() >= RobotType.REFINERY.cost) {
+            turnsWithSoup++;
+        }
+
+        if (turnsWithSoup >= 2) {
+            refineryNeeded = false;
+            turnsWithSoup = 0;
+        } else if (refineryNeeded) {
+            if (checkRobotBuiltInRound(roundNum - 1, otherUnit) != null) {
+                buildLandscaper = true;
+            }
+            return;
+        }
+
         if (landscapersBuilt == INITIAL_ATTACKING_LANDSCAPERS + LANDSCAPERS_FOR_WALL) {
             otherUnit = RobotType.DELIVERY_DRONE;
         }
@@ -45,7 +67,6 @@ public class DesignSchool extends Robot {
     }
 
     private void buildLandscapersAndOtherUnit(RobotType otherUnit, int roundNum) throws GameActionException {
-        System.out.println(buildLandscaper);
         if (buildLandscaper) {
             MapLocation builtAt = makeRobot(RobotType.LANDSCAPER);
             if (builtAt == null) {
@@ -81,6 +102,16 @@ public class DesignSchool extends Robot {
 
         if (robotBuiltMessage != null && transactor.submitTransaction(robotBuiltMessage)) {
             robotBuiltMessage = null;
+        }
+    }
+
+    private void readBlockchain(int roundNum) throws GameActionException {
+        ArrayList<Message> messages = transactor.getBlock(roundNum - 1, goal);
+        for (Message m : messages) {
+            if (m.getMessageType() == MessageType.REFINERY_NEEDED) {
+                refineryNeeded = true;
+                break;
+            }
         }
     }
 }

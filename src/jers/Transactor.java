@@ -65,6 +65,12 @@ public class Transactor {
                     messages.add(new SoupFoundMessage(msg, 3));
                 } else if (msg[2] == MessageType.WATER_FOUND.id) {
                     messages.add(new WaterFoundMessage(msg, 3));
+                } else if (msg[2] == MessageType.UNIT_PICKED_UP.id) {
+                    messages.add(new UnitPickedUpMessage(msg, 3));
+                } else if (msg[2] == MessageType.HQ_FOUND.id) {
+                    messages.add(new HqFoundMessage(msg, 3));
+                } else if (msg[2] == MessageType.REFINERY_NEEDED.id) {
+                    messages.add(new NeedRefineryMessage());
                 }
             }
         }

@@ -7,7 +7,6 @@ import jers.Messages.*;
 import jers.PathFinder;
 
 import java.util.ArrayList;
-import java.util.Map;
 import java.util.Random;
 
 public class DeliveryDrone extends Robot {
@@ -27,6 +26,7 @@ public class DeliveryDrone extends Robot {
     private Goal initialGoal;
     private MapLocation roamAroundLoc;
     private Random random;
+    private HqFoundMessage hqFoundMessage;
 
     public DeliveryDrone(RobotController rc) throws GameActionException {
         super(rc);
@@ -42,13 +42,14 @@ public class DeliveryDrone extends Robot {
 
     public void run(int roundNum) throws GameActionException {
         if (goal == Goal.STARTUP) {
-            startup(roundNum);
+            startUp(roundNum);
             if (goal == Goal.STARTUP) {
                 return;
             }
         }
 
         Goal lastGoal = null;
+        interactWithBlockchain(roundNum);
 
         // Without the while loop we waste turns changing goals
         while(rc.isReady() && goal != null && lastGoal != goal) {
@@ -56,15 +57,13 @@ public class DeliveryDrone extends Robot {
             MapLocation water = checkWater();
             if (water != null) {
                 waterLocations.add(water);
-                waterFoundMessages.add(new WaterFoundMessage(new RobotType[]{RobotType.DELIVERY_DRONE}, Goal.ALL, water));
+                if (farFromWater(water)) {
+                    waterFoundMessages.add(new WaterFoundMessage(new RobotType[]{RobotType.DELIVERY_DRONE}, Goal.ALL, water));
+                }
             }
-
-
             switch (goal) {
                 case IDLE:
-                    break;
                 case GET_INITIAL_GOAL:
-                    interactWithBlockchain(roundNum);
                     break;
                 case FIND_ENEMY_HQ:
                     findEnemyHQ();
@@ -91,7 +90,11 @@ public class DeliveryDrone extends Robot {
                     destroyUnit();
                     break;
                 default:
-                    throw new IllegalStateException("Invalid goal for landscaper " + goal);
+                    throw new IllegalStateException("Invalid goal for delivery drone " + goal);
+            }
+
+            if (goal == Goal.ROAM_AROUND) {
+                break;
             }
         }
     }
@@ -114,7 +117,7 @@ public class DeliveryDrone extends Robot {
         return closest;
     }
 
-    private void startup(int roundNum) throws GameActionException {
+    private void startUp(int roundNum) throws GameActionException {
         if (startupLastRoundChecked >= roundNum - 2) {
             goal = initialGoal != null ? initialGoal : Goal.GET_INITIAL_GOAL;
             return;
@@ -146,6 +149,9 @@ public class DeliveryDrone extends Robot {
                         UnitPickedUpMessage unitPickedUpMessage = (UnitPickedUpMessage) m;
                         pickedUpUnits.add(unitPickedUpMessage.getUnitId());
                         break;
+                    case HQ_FOUND:
+                        theirHQ = ((HqFoundMessage) m).getLocation();
+                        break;
                 }
             }
         }
@@ -155,10 +161,10 @@ public class DeliveryDrone extends Robot {
         if (!pathFinder.getGoal().equals(theirHQ)) {
             pathFinder.setGoal(theirHQ);
         }
-        pathFinder.move(false, true);
+        pathFinder.move(false, true, myHQ);
         if (rc.getLocation().distanceSquaredTo(theirHQ) < 9) {
             roamAroundLoc = theirHQ;
-            goal = Goal.ATTACK_UNITS;
+            goal = Goal.ROAM_AROUND;
             return;
         }
     }
@@ -167,10 +173,10 @@ public class DeliveryDrone extends Robot {
         if (pathFinder.getGoal() != myHQ) {
             pathFinder.setGoal(myHQ);
         }
-        pathFinder.move(false, true);
+        pathFinder.move(false, true, myHQ);
         if (rc.getLocation().distanceSquaredTo(myHQ) < 9) {
             roamAroundLoc = myHQ;
-            goal = Goal.ATTACK_UNITS;
+            goal = Goal.ROAM_AROUND;
             return;
         }
     }
@@ -217,7 +223,7 @@ public class DeliveryDrone extends Robot {
             pathFinder.setGoal(newGoal);
         }
 
-        pathFinder.move(false, true);
+        pathFinder.move(false, true, myHQ);
         goal = Goal.ATTACK_UNITS;
     }
 
@@ -229,7 +235,7 @@ public class DeliveryDrone extends Robot {
 
         pathFinder.setGoal(rc.senseRobot(target_id).getLocation());
         if (rc.isReady()) {
-            pathFinder.move(false, true);
+            pathFinder.move(false, true, myHQ);
             if (pathFinder.isFinished()) {
                 if (pickedUpUnits.contains(target_id) || !rc.canPickUpUnit(target_id)) {
                     goal = Goal.GO_TO_ENEMY_HQ;
@@ -256,11 +262,11 @@ public class DeliveryDrone extends Robot {
             pathFinder.setGoal(newGoal);
         }
 
-        pathFinder.move(false, true);
+        pathFinder.move(false, true, myHQ);
         MapLocation water = checkWater();
         if (water != null) {
             waterLocations.add(water);
-            waterFoundMessages.add(new WaterFoundMessage(new RobotType[]{RobotType.DELIVERY_DRONE}, Goal.ALL, water));
+
             pathFinder.setGoal(water);
             goal = Goal.DESTROY_UNIT;
         }
@@ -275,7 +281,7 @@ public class DeliveryDrone extends Robot {
             rc.dropUnit(dropDirection);
             goal = Goal.ROAM_AROUND;
         } else {
-            pathFinder.move(false, true);
+            pathFinder.move(false, true, myHQ);
         }
     }
 
@@ -295,6 +301,9 @@ public class DeliveryDrone extends Robot {
     // three locations where it can be. Thus, we try these possibilities until we find the HQ, then switch to
     // the attack goal.
     private void findEnemyHQ() throws GameActionException {
+        if (theirHQ != null) {
+            goal = Goal.GO_TO_ENEMY_HQ;
+        }
         if (pathFinder.getGoal() == null || (pathFinder.isFinished() && !canSeeEnemyHQ())) {
             if (hqTry < 3) {
                 pathFinder.setGoal(theirHQPossibilities[hqTry].subtract(rc.getLocation().directionTo(theirHQPossibilities[hqTry])));
@@ -304,12 +313,12 @@ public class DeliveryDrone extends Robot {
                 goal = Goal.IDLE;
             }
         } else if (pathFinder.isFinished() || canSeeEnemyHQ()) {
-            goal = Goal.ATTACK_UNITS;
+            goal = Goal.ROAM_AROUND;
             theirHQ = theirHQPossibilities[hqTry-1];
             roamAroundLoc = theirHQ;
         }
         if (rc.isReady()) {
-            pathFinder.move(false, true);
+            pathFinder.move(false, true, myHQ);
         }
     }
 
@@ -400,6 +409,9 @@ public class DeliveryDrone extends Robot {
                     UnitPickedUpMessage unitPickedUpMessage = (UnitPickedUpMessage) m;
                     pickedUpUnits.add(unitPickedUpMessage.getUnitId());
                     break;
+                case HQ_FOUND:
+                    theirHQ = ((HqFoundMessage) m).getLocation();
+                    break;
             }
         }
 
@@ -409,6 +421,20 @@ public class DeliveryDrone extends Robot {
         if (!pickedUpUnitMessages.isEmpty() && transactor.submitTransaction(pickedUpUnitMessages.get(0))) {
             pickedUpUnitMessages.remove(0);
         }
+        if (hqFoundMessage != null && transactor.submitTransaction(hqFoundMessage)) {
+            hqFoundMessage = null;
+        }
+
+    }
+
+    private boolean farFromWater(MapLocation water) {
+        for (MapLocation w : waterLocations) {
+            if (w.distanceSquaredTo(water) < Constants.FAR_THRESHOLD_RADIUS_SQUARED) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
 }

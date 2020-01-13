@@ -39,6 +39,8 @@ public class HQ extends Robot {
             default:
                 throw new IllegalStateException("Invalid goal for HQ: " + goal);
         }
+
+        writeBlockchain();
     }
 
     private void buildInitialMiners() throws GameActionException {
@@ -69,19 +71,12 @@ public class HQ extends Robot {
         } else if (checkRobotBuiltInRound(roundNum - 1, RobotType.LANDSCAPER) != null) {
             buildMiner = true;
         }
+    }
 
+    private void writeBlockchain() throws GameActionException {
         if (robotBuiltMessage != null && transactor.submitTransaction(robotBuiltMessage)) {
             robotBuiltMessage = null;
         }
-
-        if (minersBuilt >= SECOND_MINER_COUNT) {
-            goal = Goal.BUILD_INITIAL_DRONES;
-        }
     }
 
-    private void buildLandscapersAndDrones(int roundNum) throws GameActionException {
-        if (buildMiner) {
-            //MapLocation builtAt = makeRobot
-        }
-    }
 }
