@@ -242,11 +242,9 @@ public class Miner extends Robot {
                             }
                             break;
                         case DESIGN_SCHOOL:
-                            System.out.println("Found design school");
                             designSchoolLocation = message.getRobotLocation();
                             break;
                         case FULFILLMENT_CENTER:
-                            System.out.println("Found fulfillment center");
                             fulfillmentLocations.add(message.getRobotLocation());
                             break;
                         case LANDSCAPER:
@@ -345,7 +343,7 @@ public class Miner extends Robot {
     }
 
     private Goal setMiningGoal() throws GameActionException {
-        soupLocations.sort(new SoupLocComparator(rc.getLocation()));
+        soupLocations.sort(new ClosestLocComparator(rc.getLocation()));
         while (!soupLocations.isEmpty() && rc.canSenseLocation(soupLocations.get(0)) && rc.senseSoup(soupLocations.get(0)) == 0) {
             soupLocations.remove(0);
         }
@@ -395,20 +393,5 @@ public class Miner extends Robot {
         }
 
         return true;
-    }
-
-    private class SoupLocComparator implements Comparator<MapLocation> {
-
-        private MapLocation center;
-
-        SoupLocComparator(MapLocation center) {
-            this.center = center;
-        }
-
-
-        @Override
-        public int compare(MapLocation o1, MapLocation o2) {
-            return Integer.compare(o1.distanceSquaredTo(center), o2.distanceSquaredTo(center));
-        }
     }
 }

@@ -3,35 +3,51 @@ package jers.Robots;
 import battlecode.common.*;
 import jers.Constants;
 import jers.Goal;
+import jers.Messages.*;
 import jers.PathFinder;
 
 import java.util.ArrayList;
 import java.util.Map;
+import java.util.Random;
 
-public class Drone extends Robot {
+public class DeliveryDrone extends Robot {
     // Map is rotationally, horizontally, or vertically symmetric, so we don't know for sure where the HQ is.
     private MapLocation[] theirHQPossibilities;
     private int hqTry;
     private MapLocation theirHQ;
     private PathFinder pathFinder;
     private int target_id;
+    private ArrayList<MapLocation> waterLocations;
+    private ArrayList<Message> waterFoundMessages;
+    int startupLastRoundChecked = 0;
+    private Goal initialGoal;
+    private Random random;
 
-    public Drone(RobotController rc) throws GameActionException {
+    public DeliveryDrone(RobotController rc) throws GameActionException {
         super(rc);
-        myHQ = checkRobotBuiltInRange(1, 20, RobotType.HQ);
-        theirHQPossibilities = calculateEnemyHQLocations(myHQ);
         hqTry = 0;
         pathFinder = new PathFinder(rc);
+        waterLocations = new ArrayList<>();
+        waterFoundMessages = new ArrayList<>();
+        goal = Goal.STARTUP;
     }
 
     public void run(int roundNum) throws GameActionException {
-        if ((goal == null || goal == Goal.IDLE) && roundNum - createdOnRound < GameConstants.INITIAL_COOLDOWN_TURNS) {
-            goal = checkInitialGoal(rc.getLocation(), roundNum);
+        if (goal == Goal.STARTUP) {
+            startup(roundNum);
         }
 
         // Without the while loop we waste turns changing goals
-        while (rc.isReady() && goal != null && goal != Goal.IDLE) {
+        while (rc.isReady() && goal != null && goal != Goal.IDLE && goal != Goal.STARTUP) {
+            MapLocation water = checkWater();
+            if (water != null) {
+                waterLocations.add(water);
+                waterFoundMessages.add(new WaterFoundMessage(new RobotType[]{RobotType.DELIVERY_DRONE}, Goal.ALL, water));
+            }
             switch (goal) {
+                case GET_INITIAL_GOAL:
+                    interactWithBlockchain(roundNum);
+                    break;
                 case FIND_ENEMY_HQ:
                     findEnemyHQ();
                     break;
@@ -50,6 +66,9 @@ public class Drone extends Robot {
                 case PICK_UP_UNIT:
                     pickUpUnit();
                     break;
+                case FIND_WATER:
+                    findWater();
+                    break;
                 case DESTROY_UNIT:
                     destroyUnit();
                     break;
@@ -59,8 +78,59 @@ public class Drone extends Robot {
         }
     }
 
+    private MapLocation checkWater() throws GameActionException {
+        double radius = Math.sqrt(rc.getCurrentSensorRadiusSquared());
+        MapLocation closest = null;
+        int closestDist = Integer.MAX_VALUE;
+
+        for (int dx = -1 * (int) radius; dx < radius; dx++) {
+            for (int dy = -1 * (int) radius; dy < radius; dy++) {
+                MapLocation check = rc.getLocation().translate(dx, dy);
+                if (rc.canSenseLocation(check) && rc.senseFlooding(check) && (dx*dx + dy*dy < closestDist)) {
+                    closestDist = dx*dx + dy*dy;
+                    closest = check;
+                }
+            }
+        }
+
+        return closest;
+    }
+
+    private void startup(int roundNum) throws GameActionException {
+        if (startupLastRoundChecked >= roundNum - 2) {
+            goal = initialGoal != null ? initialGoal : Goal.GET_INITIAL_GOAL;
+            return;
+        }
+
+        while (startupLastRoundChecked < roundNum - 1 && Clock.getBytecodesLeft() > 600) {
+            ArrayList<Message> messages = transactor.getBlock(++startupLastRoundChecked, goal);
+            for (Message m : messages) {
+                switch (m.getMessageType()) {
+                    case ROBOT_BUILT:
+                        RobotBuiltMessage robotBuiltMessage = (RobotBuiltMessage) m;
+                        if (robotBuiltMessage.getRobotType() == RobotType.HQ) {
+                            myHQ = robotBuiltMessage.getRobotLocation();
+                            theirHQPossibilities = calculateEnemyHQLocations(myHQ);
+                        }
+                        break;
+                    case WATER_FOUND:
+                        WaterFoundMessage waterFoundMessage = (WaterFoundMessage) m;
+                        waterLocations.add(waterFoundMessage.getLocation());
+                        break;
+                    case INITIAL_GOAL:
+                        InitialGoalMessage initialGoalMessage = (InitialGoalMessage) m;
+                        if (initialGoalMessage.getRoundCreated() == createdOnRound &&
+                                initialGoalMessage.getInitialLocation().equals(rc.getLocation())) {
+                            initialGoal = initialGoalMessage.getInitialGoal();
+                        }
+                        break;
+                }
+            }
+        }
+    }
+
     private void goToEnemyHQ() throws GameActionException {
-        if (pathFinder.getGoal() != theirHQ) {
+        if (!pathFinder.getGoal().equals(theirHQ)) {
             pathFinder.setGoal(theirHQ);
         }
         pathFinder.move(false, true);
@@ -149,9 +219,30 @@ public class Drone extends Robot {
                 }
                 rc.pickUpUnit(target_id);
                 //Set this to be the closest location of water
-                pathFinder.setGoal(new MapLocation(35, 18));
-                goal = Goal.DESTROY_UNIT;
+                if (!waterLocations.isEmpty()) {
+                    waterLocations.sort(new ClosestLocComparator(rc.getLocation()));
+                    pathFinder.setGoal(waterLocations.get(0));
+                    goal = Goal.DESTROY_UNIT;
+                } else {
+                    goal = Goal.FIND_WATER;
+                }
             }
+        }
+    }
+
+    private void findWater() throws GameActionException {
+        if (pathFinder.getGoal() == null || pathFinder.isFinished()) {
+            MapLocation newGoal = new MapLocation(random.nextInt(rc.getMapWidth()), random.nextInt(rc.getMapHeight()));
+            pathFinder.setGoal(newGoal);
+        }
+
+        pathFinder.move(false, true);
+        MapLocation water = checkWater();
+        if (water != null) {
+            waterLocations.add(water);
+            waterFoundMessages.add(new WaterFoundMessage(new RobotType[]{RobotType.DELIVERY_DRONE}, Goal.ALL, water));
+            pathFinder.setGoal(water);
+            goal = Goal.DESTROY_UNIT;
         }
     }
 
@@ -259,6 +350,37 @@ public class Drone extends Robot {
         }
 
         return sorted;
+    }
+
+    private void interactWithBlockchain(int roundNum) throws GameActionException {
+        ArrayList<Message> messages = transactor.getBlock(roundNum - 1, goal);
+
+        for (Message m : messages) {
+            switch (m.getMessageType()) {
+                case ROBOT_BUILT:
+                    RobotBuiltMessage robotBuiltMessage = (RobotBuiltMessage) m;
+                    if (myHQ == null && robotBuiltMessage.getRobotType() == RobotType.HQ) {
+                        myHQ = robotBuiltMessage.getRobotLocation();
+                        theirHQPossibilities = calculateEnemyHQLocations(myHQ);
+                    }
+                    break;
+                case INITIAL_GOAL:
+                    InitialGoalMessage initialGoalMessage = (InitialGoalMessage) m;
+                    if (initialGoalMessage.getRoundCreated() == createdOnRound &&
+                            initialGoalMessage.getInitialLocation().equals(rc.getLocation())) {
+                        initialGoal = initialGoalMessage.getInitialGoal();
+                    }
+                    break;
+                case WATER_FOUND:
+                    WaterFoundMessage waterFoundMessage = (WaterFoundMessage) m;
+                    waterLocations.add(waterFoundMessage.getLocation());
+                    break;
+            }
+        }
+
+        if (!waterFoundMessages.isEmpty() && transactor.submitTransaction(waterFoundMessages.get(0))) {
+            waterFoundMessages.remove(0);
+        }
     }
 
 }

@@ -85,8 +85,8 @@ public class FulfillmentCenter extends Robot {
 
             buildDrone = false;
             dronesBuilt += 1;
-            //initialGoalMessage = new InitialGoalMessage(new RobotType[]{RobotType.DELIVERY_DRONE},
-                    //Goal.ALL, builtAt, roundNum, Goal.ATTACK_ENEMY_HQ);
+            /*initialGoalMessage = new InitialGoalMessage(new RobotType[]{RobotType.DELIVERY_DRONE},
+                    Goal.ALL, builtAt, roundNum, Goal.ATTACK_ENEMY_HQ);*/
             robotBuiltMessage = new RobotBuiltMessage(new RobotType[]{RobotType.HQ, RobotType.MINER},
                     Goal.ALL, builtAt, RobotType.DELIVERY_DRONE);
         } else if (!buildDrone && checkRobotBuiltInRound(roundNum - 1, RobotType.LANDSCAPER) != null) {

@@ -6,6 +6,7 @@ import jers.Messages.*;
 import jers.Transactor;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 
@@ -163,5 +164,20 @@ public abstract class Robot {
         }
 
         return null;
+    }
+
+     class ClosestLocComparator implements Comparator<MapLocation> {
+
+        private MapLocation center;
+
+        ClosestLocComparator(MapLocation center) {
+            this.center = center;
+        }
+
+
+        @Override
+        public int compare(MapLocation o1, MapLocation o2) {
+            return Integer.compare(o1.distanceSquaredTo(center), o2.distanceSquaredTo(center));
+        }
     }
 }

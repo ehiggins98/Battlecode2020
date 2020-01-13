@@ -2,6 +2,7 @@ package jers;
 
 import battlecode.common.GameActionException;
 import battlecode.common.RobotController;
+import battlecode.common.RobotType;
 import battlecode.common.Transaction;
 import jers.Messages.*;
 
@@ -62,6 +63,8 @@ public class Transactor {
                     messages.add(new InitialGoalMessage(msg, 3));
                 } else if (msg[2] == MessageType.SOUP_FOUND.id) {
                     messages.add(new SoupFoundMessage(msg, 3));
+                } else if (msg[2] == MessageType.WATER_FOUND.id) {
+                    messages.add(new WaterFoundMessage(msg, 3));
                 }
             }
         }
