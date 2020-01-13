@@ -50,6 +50,7 @@ public class DeliveryDrone extends Robot {
                 waterLocations.add(water);
                 waterFoundMessages.add(new WaterFoundMessage(new RobotType[]{RobotType.DELIVERY_DRONE}, Goal.ALL, water));
             }
+
             switch (goal) {
                 case IDLE:
                     break;
@@ -107,6 +108,7 @@ public class DeliveryDrone extends Robot {
     private void startup(int roundNum) throws GameActionException {
         if (startupLastRoundChecked >= roundNum - 2) {
             goal = initialGoal != null ? initialGoal : Goal.GET_INITIAL_GOAL;
+            System.out.println(initialGoal);
             return;
         }
 
@@ -184,7 +186,7 @@ public class DeliveryDrone extends Robot {
     private void defendHQ() throws GameActionException {
         int min = Integer.MAX_VALUE;
         RobotInfo robotToAttack = null;
-        RobotInfo[] robots = rc.senseNearbyRobots(24, rc.getTeam().opponent());
+        RobotInfo[] robots = rc.senseNearbyRobots(rc.getCurrentSensorRadiusSquared(), rc.getTeam().opponent());
         for (RobotInfo robot : robots) {
             if (robot.type != RobotType.LANDSCAPER && robot.type != RobotType.MINER) {
                 continue;
@@ -256,10 +258,7 @@ public class DeliveryDrone extends Robot {
             rc.dropUnit(dropDirection);
             goal = Goal.GO_TO_ENEMY_HQ;
         } else {
-            boolean success = pathFinder.move(false, true);
-            if (!success) {
-                System.out.println(success);
-            }
+            pathFinder.move(false, true);
         }
     }
 
@@ -373,6 +372,7 @@ public class DeliveryDrone extends Robot {
                     if (initialGoalMessage.getRoundCreated() == createdOnRound &&
                             initialGoalMessage.getInitialLocation().equals(rc.getLocation())) {
                         initialGoal = initialGoalMessage.getInitialGoal();
+                        System.out.println(initialGoal);
                     }
                     break;
                 case WATER_FOUND:

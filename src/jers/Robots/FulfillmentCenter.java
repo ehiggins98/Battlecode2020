@@ -56,7 +56,7 @@ public class FulfillmentCenter extends Robot {
 
             dronesBuilt += 1;
             initialGoalMessage = new InitialGoalMessage(new RobotType[]{RobotType.DELIVERY_DRONE},
-                    Goal.ALL, builtAt, roundNum, dronesBuilt > INITIAL_ATTACKING_DRONES ? Goal.FIND_ENEMY_HQ : Goal.DEFEND_HQ);
+                    Goal.ALL, builtAt, roundNum, dronesBuilt > INITIAL_ATTACKING_DRONES ? Goal.FIND_ENEMY_HQ : Goal.GO_TO_MY_HQ);
         }
 
         if (initialGoalMessage != null && transactor.submitTransaction(initialGoalMessage)) {

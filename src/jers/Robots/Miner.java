@@ -72,7 +72,6 @@ public class Miner extends Robot {
         makeBuildings();
 
         while (rc.isReady() && lastGoal != goal) {
-            System.out.println(goal);
             lastGoal = goal;
             switch (goal) {
                 case IDLE:
