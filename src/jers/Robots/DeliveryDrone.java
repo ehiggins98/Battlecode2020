@@ -19,8 +19,10 @@ public class DeliveryDrone extends Robot {
     private MapLocation theirHQ;
     private PathFinder pathFinder;
     private int target_id;
+    private ArrayList<Integer> pickedUpUnits;
     private ArrayList<MapLocation> waterLocations;
     private ArrayList<Message> waterFoundMessages;
+    private ArrayList<Message> pickedUpUnitMessages;
     int startupLastRoundChecked = 0;
     private Goal initialGoal;
     private MapLocation roamAroundLoc;
@@ -30,6 +32,8 @@ public class DeliveryDrone extends Robot {
         super(rc);
         hqTry = 0;
         pathFinder = new PathFinder(rc);
+        pickedUpUnits = new ArrayList<>();
+        pickedUpUnitMessages = new ArrayList<>();
         waterLocations = new ArrayList<>();
         waterFoundMessages = new ArrayList<>();
         goal = Goal.STARTUP;
@@ -139,6 +143,9 @@ public class DeliveryDrone extends Robot {
                             initialGoal = initialGoalMessage.getInitialGoal();
                         }
                         break;
+                    case UNIT_PICKED_UP:
+                        UnitPickedUpMessage unitPickedUpMessage = (UnitPickedUpMessage) m;
+                        pickedUpUnits.add(unitPickedUpMessage.getUnitId());
                 }
             }
         }
@@ -174,6 +181,10 @@ public class DeliveryDrone extends Robot {
         RobotInfo[] robots = rc.senseNearbyRobots(24, rc.getTeam().opponent());
         for (RobotInfo robot : robots) {
             if (robot.type != RobotType.LANDSCAPER && robot.type != RobotType.MINER) {
+                continue;
+            }
+
+            if (pickedUpUnits.contains(robot.ID)) {
                 continue;
             }
 
@@ -223,11 +234,13 @@ public class DeliveryDrone extends Robot {
             if (pathFinder.isFinished()) {
                 //TODO: Drone will see unit picked up by other drone and try to follow it
                 // We need to figure out if the target is being carried by a drone before other drone is adjacent.
-                if (!rc.canPickUpUnit(target_id)) {
+                if (pickedUpUnits.contains(target_id) || !rc.canPickUpUnit(target_id)) {
                     goal = Goal.GO_TO_ENEMY_HQ;
                     return;
                 }
                 rc.pickUpUnit(target_id);
+                pickedUpUnits.add(target_id);
+                pickedUpUnitMessages.add(new UnitPickedUpMessage(new RobotType[]{RobotType.DELIVERY_DRONE}, Goal.ALL, target_id));
                 //Set this to be the closest location of water
                 if (!waterLocations.isEmpty()) {
                     waterLocations.sort(new ClosestLocComparator(rc.getLocation()));
