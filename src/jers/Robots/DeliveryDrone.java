@@ -11,6 +11,8 @@ import java.util.Map;
 import java.util.Random;
 
 public class DeliveryDrone extends Robot {
+    private final int ROAM_RADIUS = 5;
+
     // Map is rotationally, horizontally, or vertically symmetric, so we don't know for sure where the HQ is.
     private MapLocation[] theirHQPossibilities;
     private int hqTry;
@@ -21,6 +23,7 @@ public class DeliveryDrone extends Robot {
     private ArrayList<Message> waterFoundMessages;
     int startupLastRoundChecked = 0;
     private Goal initialGoal;
+    private MapLocation roamAroundLoc;
     private Random random;
 
     public DeliveryDrone(RobotController rc) throws GameActionException {
@@ -30,6 +33,7 @@ public class DeliveryDrone extends Robot {
         waterLocations = new ArrayList<>();
         waterFoundMessages = new ArrayList<>();
         goal = Goal.STARTUP;
+        random = new Random();
     }
 
     public void run(int roundNum) throws GameActionException {
@@ -51,6 +55,7 @@ public class DeliveryDrone extends Robot {
                 waterFoundMessages.add(new WaterFoundMessage(new RobotType[]{RobotType.DELIVERY_DRONE}, Goal.ALL, water));
             }
 
+
             switch (goal) {
                 case IDLE:
                     break;
@@ -69,8 +74,8 @@ public class DeliveryDrone extends Robot {
                 case ATTACK_UNITS:
                     attackUnits();
                     break;
-                case DEFEND_HQ:
-                    defendHQ();
+                case ROAM_AROUND:
+                    roamAround();
                     break;
                 case PICK_UP_UNIT:
                     pickUpUnit();
@@ -145,6 +150,7 @@ public class DeliveryDrone extends Robot {
         }
         pathFinder.move(false, true);
         if (rc.getLocation().distanceSquaredTo(theirHQ) < 9) {
+            roamAroundLoc = theirHQ;
             goal = Goal.ATTACK_UNITS;
             return;
         }
@@ -156,7 +162,8 @@ public class DeliveryDrone extends Robot {
         }
         pathFinder.move(false, true);
         if (rc.getLocation().distanceSquaredTo(myHQ) < 9) {
-            goal = Goal.DEFEND_HQ;
+            roamAroundLoc = myHQ;
+            goal = Goal.ATTACK_UNITS;
             return;
         }
     }
@@ -180,28 +187,28 @@ public class DeliveryDrone extends Robot {
         if (robotToAttack != null) {
             target_id = robotToAttack.ID;
             goal = Goal.PICK_UP_UNIT;
+        } else {
+            goal = Goal.ROAM_AROUND;
         }
     }
 
-    private void defendHQ() throws GameActionException {
-        int min = Integer.MAX_VALUE;
-        RobotInfo robotToAttack = null;
-        RobotInfo[] robots = rc.senseNearbyRobots(rc.getCurrentSensorRadiusSquared(), rc.getTeam().opponent());
-        for (RobotInfo robot : robots) {
-            if (robot.type != RobotType.LANDSCAPER && robot.type != RobotType.MINER) {
-                continue;
-            }
+    private void roamAround() throws GameActionException {
+        if (roamAroundLoc == null) {
+            return;
+        }
 
-            int distanceTo = rc.getLocation().distanceSquaredTo(robot.location);
-            if (distanceTo < min) {
-                min = distanceTo;
-                robotToAttack = robot;
-            }
+        if (pathFinder.getGoal() == null || pathFinder.isFinished()) {
+            MapLocation newGoal = new MapLocation(
+                    random.nextInt(ROAM_RADIUS * 2) + roamAroundLoc.x - ROAM_RADIUS,
+                    random.nextInt(ROAM_RADIUS * 2) + roamAroundLoc.y - ROAM_RADIUS
+            );
+
+            pathFinder.setGoal(newGoal);
+            System.out.println("Set goal to " + newGoal);
         }
-        if (robotToAttack != null) {
-            target_id = robotToAttack.ID;
-            goal = Goal.PICK_UP_UNIT;
-        }
+
+        pathFinder.move(false, true);
+        goal = Goal.ATTACK_UNITS;
     }
 
     private void pickUpUnit() throws GameActionException {
@@ -256,7 +263,7 @@ public class DeliveryDrone extends Robot {
                 return;
             }
             rc.dropUnit(dropDirection);
-            goal = Goal.GO_TO_ENEMY_HQ;
+            goal = Goal.ROAM_AROUND;
         } else {
             pathFinder.move(false, true);
         }
@@ -289,6 +296,7 @@ public class DeliveryDrone extends Robot {
         } else if (pathFinder.isFinished() || canSeeEnemyHQ()) {
             goal = Goal.ATTACK_UNITS;
             theirHQ = theirHQPossibilities[hqTry-1];
+            roamAroundLoc = theirHQ;
         }
         if (rc.isReady()) {
             pathFinder.move(false, true);
@@ -372,7 +380,6 @@ public class DeliveryDrone extends Robot {
                     if (initialGoalMessage.getRoundCreated() == createdOnRound &&
                             initialGoalMessage.getInitialLocation().equals(rc.getLocation())) {
                         initialGoal = initialGoalMessage.getInitialGoal();
-                        System.out.println(initialGoal);
                     }
                     break;
                 case WATER_FOUND:

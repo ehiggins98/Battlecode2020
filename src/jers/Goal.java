@@ -16,13 +16,13 @@ public enum Goal {
     BUILD_LANDSCAPERS_AND_DRONES(13), // HQ, Design school, and Fulfillment Center
     BUILD_INITIAL_DRONES(14), // Fulfillment Center
     ATTACK_UNITS(15), // Drone
-    DEFEND_HQ(16), // Drone
     DESTROY_UNIT(17), // Drone
     PICK_UP_UNIT(18), // Drone
     GO_TO_ENEMY_HQ(19), // Drone
     FIND_WATER(20), // Drone
     GET_INITIAL_GOAL(21), // Drone
-    ALL(22);
+    ROAM_AROUND(22), //Drone
+    ALL(23);
 
     private final int id;
     private Goal(int id) {
