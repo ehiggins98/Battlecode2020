@@ -2,6 +2,7 @@ package jers;
 
 import battlecode.common.GameActionException;
 import battlecode.common.RobotController;
+import battlecode.common.RobotType;
 import battlecode.common.Transaction;
 import jers.Messages.*;
 
@@ -56,10 +57,20 @@ public class Transactor {
         for (Transaction t : transactions) {
             if (Message.isForMe(t.getMessage(), rc.getType(), currentGoal, fromRound)) {
                 int[] msg = t.getMessage();
-                if (msg[2] == MessageType.ROBOT_BUILT.getId()) {
+                if (msg[2] == MessageType.ROBOT_BUILT.id) {
                     messages.add(new RobotBuiltMessage(msg, 3));
-                } else if (msg[2] == MessageType.INITIAL_GOAL.getId()) {
+                } else if (msg[2] == MessageType.INITIAL_GOAL.id) {
                     messages.add(new InitialGoalMessage(msg, 3));
+                } else if (msg[2] == MessageType.SOUP_FOUND.id) {
+                    messages.add(new SoupFoundMessage(msg, 3));
+                } else if (msg[2] == MessageType.WATER_FOUND.id) {
+                    messages.add(new WaterFoundMessage(msg, 3));
+                } else if (msg[2] == MessageType.UNIT_PICKED_UP.id) {
+                    messages.add(new UnitPickedUpMessage(msg, 3));
+                } else if (msg[2] == MessageType.HQ_FOUND.id) {
+                    messages.add(new HqFoundMessage(msg, 3));
+                } else if (msg[2] == MessageType.REFINERY_NEEDED.id) {
+                    messages.add(new NeedRefineryMessage());
                 }
             }
         }

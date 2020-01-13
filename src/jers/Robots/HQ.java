@@ -1,20 +1,24 @@
 package jers.Robots;
 
 import battlecode.common.*;
+import jers.Constants;
 import jers.Goal;
 import jers.Messages.RobotBuiltMessage;
 
 public class HQ extends Robot {
     private final int INITIAL_MINER_COUNT = 5;
+    private final int SECOND_MINER_COUNT = 12;
     private boolean buildMiner = true;
     private boolean locationBroadcast = false;
     private int minersBuilt;
     private RobotBuiltMessage robotBuiltMessage;
 
+
     public HQ(RobotController rc) throws GameActionException {
         super(rc);
         minersBuilt = 0;
         goal = Goal.BUILD_INITIAL_MINERS;
+        myHQ = rc.getLocation();
     }
 
     @Override
@@ -27,6 +31,8 @@ public class HQ extends Robot {
         useNetGun();
 
         switch (goal) {
+            case IDLE:
+                break;
             case BUILD_INITIAL_MINERS:
                 buildInitialMiners();
                 break;
@@ -36,6 +42,8 @@ public class HQ extends Robot {
             default:
                 throw new IllegalStateException("Invalid goal for HQ: " + goal);
         }
+
+        writeBlockchain();
     }
 
     private void buildInitialMiners() throws GameActionException {
@@ -59,10 +67,16 @@ public class HQ extends Robot {
             buildMiner = false;
             minersBuilt += 1;
             robotBuiltMessage = new RobotBuiltMessage(new RobotType[]{RobotType.DESIGN_SCHOOL}, Goal.BUILD_LANDSCAPERS_AND_MINERS, builtAt, RobotType.MINER);
+
+            if (minersBuilt >= Constants.LANDSCAPERS_FOR_WALL + Constants.INITIAL_ATTACKING_LANDSCAPERS + INITIAL_MINER_COUNT) {
+                goal = Goal.IDLE;
+            }
         } else if (checkRobotBuiltInRound(roundNum - 1, RobotType.LANDSCAPER) != null) {
             buildMiner = true;
         }
+    }
 
+    private void writeBlockchain() throws GameActionException {
         if (robotBuiltMessage != null && transactor.submitTransaction(robotBuiltMessage)) {
             robotBuiltMessage = null;
         }

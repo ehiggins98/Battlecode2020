@@ -2,14 +2,13 @@ package jers.Robots;
 
 import battlecode.common.*;
 import jers.Goal;
-import jers.Messages.InitialGoalMessage;
-import jers.Messages.Message;
-import jers.Messages.MessageType;
-import jers.Messages.RobotBuiltMessage;
+import jers.Messages.*;
 import jers.Transactor;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
+import java.util.List;
 
 public abstract class Robot {
 
@@ -25,12 +24,11 @@ public abstract class Robot {
     int createdOnRound;
     MapLocation myHQ;
 
-    public Robot(RobotController rc) throws GameActionException {
+    public Robot(RobotController rc) {
         this.rc = rc;
         this.goal = Goal.IDLE;
         this.transactor = new Transactor(rc);
         this.createdOnRound = rc.getRoundNum() - 1;
-        myHQ = rc.getType() == RobotType.HQ ? rc.getLocation() : checkRobotBuiltInRange(1, 50, RobotType.HQ);
     }
 
     /**
@@ -108,6 +106,26 @@ public abstract class Robot {
         return Goal.IDLE;
     }
 
+    ArrayList<MapLocation> checkSoupFoundInRound(int round) throws GameActionException {
+        return checkSoupFoundInRange(round, round + 1);
+    }
+
+    ArrayList<MapLocation> checkSoupFoundInRange(int startRound, int endRound) throws GameActionException {
+        ArrayList<MapLocation> results = new ArrayList<>();
+        for (int round = startRound; round < endRound; round++) {
+            ArrayList<Message> messages = transactor.getBlock(round, goal);
+            for (Message m : messages) {
+                if (m.getMessageType() != MessageType.SOUP_FOUND) {
+                    continue;
+                }
+
+                results.add(((SoupFoundMessage) m).getLocation());
+            }
+        }
+
+        return results;
+    }
+
     /**
      * Get an open tile adjacent to the given tile, starting from the ideal direction and proceeding outward through the
      * given valid directions.
@@ -117,7 +135,7 @@ public abstract class Robot {
      * @return The open location closest to the ideal direction, or null if there is no open valid direction.
      * @throws GameActionException
      */
-    MapLocation getOpenTileAdjacent(MapLocation center, Direction ideal, HashSet<Direction> valid) throws GameActionException {
+    MapLocation getOpenTileAdjacent(MapLocation center, Direction ideal, HashSet<Direction> valid, boolean avoidHQ) throws GameActionException {
         Direction rotLeft = ideal;
         Direction rotRight = ideal;
 
@@ -125,9 +143,13 @@ public abstract class Robot {
             MapLocation rotLeftLoc = center.add(rotLeft);
             MapLocation rotRightLoc = center.add(rotRight);
 
-            if (valid.contains(rotLeft) && rc.canSenseLocation(rotLeftLoc) && (!rc.isLocationOccupied(rotLeftLoc) || rc.getLocation().equals(rotLeftLoc)) && !rc.senseFlooding(rotLeftLoc)) {
+            if (valid.contains(rotLeft) && rc.canSenseLocation(rotLeftLoc) &&
+                    (!rc.isLocationOccupied(rotLeftLoc) || rc.getLocation().equals(rotLeftLoc)) &&
+                    !rc.senseFlooding(rotLeftLoc) && (!avoidHQ || !rotLeftLoc.isAdjacentTo(myHQ))) {
                 return rotLeftLoc;
-            } else if (valid.contains(rotRight) && rc.canSenseLocation(rotRightLoc) && (!rc.isLocationOccupied(rotRightLoc) || rc.getLocation().equals(rotLeftLoc)) && !rc.senseFlooding(rotRightLoc)) {
+            } else if (valid.contains(rotRight) && rc.canSenseLocation(rotRightLoc) &&
+                    (!rc.isLocationOccupied(rotRightLoc) || rc.getLocation().equals(rotLeftLoc)) &&
+                    !rc.senseFlooding(rotRightLoc) && (!avoidHQ || !rotRightLoc.isAdjacentTo(myHQ))) {
                 return rotRightLoc;
             }
 
@@ -142,5 +164,20 @@ public abstract class Robot {
         }
 
         return null;
+    }
+
+     class ClosestLocComparator implements Comparator<MapLocation> {
+
+        private MapLocation center;
+
+        ClosestLocComparator(MapLocation center) {
+            this.center = center;
+        }
+
+
+        @Override
+        public int compare(MapLocation o1, MapLocation o2) {
+            return Integer.compare(o1.distanceSquaredTo(center), o2.distanceSquaredTo(center));
+        }
     }
 }

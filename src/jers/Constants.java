@@ -1,16 +1,19 @@
 package jers;
 
 import battlecode.common.Direction;
-import battlecode.common.RobotType;
 
 import java.util.Arrays;
-import java.util.List;
+import java.util.HashSet;
 
 public class Constants {
-    public static Direction[] directions = {Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST,
-            Direction.NORTHEAST, Direction.NORTHWEST, Direction.SOUTHEAST, Direction.SOUTHWEST};
-
-    public static List<RobotType> robotTypes = Arrays.asList(RobotType.MINER, RobotType.REFINERY, RobotType.HQ, RobotType.COW,
-            RobotType.DELIVERY_DRONE, RobotType.DESIGN_SCHOOL, RobotType.FULFILLMENT_CENTER, RobotType.LANDSCAPER,
-            RobotType.NET_GUN, RobotType.VAPORATOR);
+    public static int INITIAL_ATTACKING_LANDSCAPERS = 1;
+    public static int INITIAL_ATTACKING_DRONES = 4;
+    public static int INITIAL_DEFENDING_DRONES = 4;
+    public static int LANDSCAPERS_FOR_WALL = 4;
+    // Distance needed to be considered "far" from HQ. We broadcast soup locations
+    // if found beyond this distance, and build a refinery if soup is found at least
+    // this far from HQ.
+    public static int FAR_THRESHOLD_RADIUS_SQUARED = 25;
+    public static HashSet<Direction> directions = new HashSet<>(Arrays.asList(Direction.allDirections()));
+    public static HashSet<Direction> cardinalDirections = new HashSet<>(Arrays.asList(Direction.cardinalDirections()));
 }

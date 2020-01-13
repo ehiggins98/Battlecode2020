@@ -81,9 +81,12 @@ public class PathFinder {
      * @param tryDig Whether the pathfinder should try to dig if it hits a wall.
      * @return A value indicating whether we can move. This will be false only if the goal is unreachable.
      */
-    public boolean move(boolean tryDig) throws GameActionException {
+    public boolean move(boolean tryDig, boolean tryFly, MapLocation myHQ) throws GameActionException {
         if (tryDig && rc.getType() != RobotType.LANDSCAPER) {
             throw new IllegalArgumentException("Can't try to dig if unit is not landscaper");
+        }
+        if (tryFly && rc.getType() != RobotType.DELIVERY_DRONE) {
+            throw new IllegalArgumentException("Can't try to fly if unit is not drone");
         }
 
         boolean dig = false;
@@ -97,10 +100,15 @@ public class PathFinder {
         Direction nextStep = null;
         double min = Double.POSITIVE_INFINITY;
 
-        for (Direction d : Constants.directions) {
+        for (Direction d : Direction.allDirections()) {
             MapLocation newLoc = rc.getLocation().add(d);
-            boolean diggingMightHelp = tryDig && diggingWouldFixBarrier(newLoc);
-            if ((rc.canMove(d) || diggingMightHelp) && !visited.contains(newLoc) && !rc.senseFlooding(rc.getLocation().add(d))) {
+            boolean diggingMightHelp = tryDig && isWall(newLoc);
+
+            if ((rc.canMove(d) || ((tryDig || tryFly) && isWall(newLoc))) && !visited.contains(newLoc) && (tryFly || !rc.senseFlooding(rc.getLocation().add(d)))) {
+                if (tryDig && isWall(newLoc) && myHQ.distanceSquaredTo(rc.getLocation()) < Constants.FAR_THRESHOLD_RADIUS_SQUARED) {
+                    continue;
+                }
+
                 double dist;
                 if ((dist = newLoc.distanceSquaredTo(goal)) < min) {
                     min = dist;
@@ -136,6 +144,7 @@ public class PathFinder {
 
             visited.add(rc.getLocation().add(nextStep));
             rc.move(nextStep);
+            rc.setIndicatorLine(rc.getLocation(), goal, 0, 255, 0);
             steps += 1;
         }
 
@@ -143,7 +152,7 @@ public class PathFinder {
     }
 
     // Get a value indicating whether digging would allow us to pass a barrier
-    private boolean diggingWouldFixBarrier(MapLocation newLoc) throws GameActionException {
+    private boolean isWall(MapLocation newLoc) throws GameActionException {
         return rc.isReady() && rc.canSenseLocation(newLoc) && !rc.isLocationOccupied(newLoc) && Math.abs(rc.senseElevation(newLoc) - rc.senseElevation(rc.getLocation())) > GameConstants.MAX_DIRT_DIFFERENCE;
     }
 
