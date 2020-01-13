@@ -2,7 +2,12 @@ package jers.Robots;
 
 import battlecode.common.*;
 import jers.Goal;
+import jers.Messages.ChangeGoalMessage;
+import jers.Messages.Message;
+import jers.Messages.MessageType;
 import jers.Messages.RobotBuiltMessage;
+
+import java.util.ArrayList;
 
 public class HQ extends Robot {
     private final int INITIAL_MINER_COUNT = 5;
@@ -11,6 +16,7 @@ public class HQ extends Robot {
     private boolean locationBroadcast = false;
     private int minersBuilt;
     private RobotBuiltMessage robotBuiltMessage;
+    private boolean hasStartedSecondAttack;
 
 
     public HQ(RobotController rc) throws GameActionException {
@@ -18,6 +24,7 @@ public class HQ extends Robot {
         minersBuilt = 0;
         goal = Goal.BUILD_INITIAL_MINERS;
         myHQ = rc.getLocation();
+        hasStartedSecondAttack = false;
     }
 
     @Override
@@ -32,6 +39,12 @@ public class HQ extends Robot {
                 break;
             case BUILD_LANDSCAPERS_AND_MINERS:
                 buildLandscapersAndMiners(roundNum);
+                break;
+            case BUILD_LANDSCAPERS_AND_DRONES:
+                buildLandscapersAndDrones(roundNum);
+                break;
+            case REQUEST_LANDSCAPERS_AND_DRONES:
+                requestLandscapersAndDrones(roundNum);
                 break;
             default:
                 throw new IllegalStateException("Invalid goal for HQ: " + goal);
@@ -67,14 +80,31 @@ public class HQ extends Robot {
             robotBuiltMessage = null;
         }
 
-        if (minersBuilt >= SECOND_MINER_COUNT) {
-            goal = Goal.BUILD_INITIAL_DRONES;
+        if (minersBuilt >= SECOND_MINER_COUNT-1) {
+            System.out.println("Set new goal");
+            goal = Goal.REQUEST_LANDSCAPERS_AND_DRONES;
         }
     }
 
+    private void requestLandscapersAndDrones(int roundNum) throws GameActionException {
+        int numCompleted = 0;
+        ArrayList<Message> messages = transactor.getBlock(roundNum - 1, goal);
+        for (Message message : messages) {
+            if (message.getMessageType().equals(MessageType.REQUEST_COMPLETED)) {
+                numCompleted += 1;
+            }
+        }
+        if (numCompleted == 2) {
+            goal = Goal.BUILD_LANDSCAPERS_AND_DRONES;
+            return;
+        }
+        transactor.submitTransaction(new ChangeGoalMessage(new RobotType[] {RobotType.DESIGN_SCHOOL, RobotType.FULFILLMENT_CENTER}, Goal.IDLE, Goal.WAITING_FOR_COMPLETION));
+    }
+
     private void buildLandscapersAndDrones(int roundNum) throws GameActionException {
-        if (buildMiner) {
-            //MapLocation builtAt = makeRobot
+        if (!hasStartedSecondAttack) {
+            transactor.submitTransaction(new ChangeGoalMessage(new RobotType[] {RobotType.DESIGN_SCHOOL, RobotType.FULFILLMENT_CENTER}, Goal.WAITING_FOR_COMPLETION, Goal.BUILD_LANDSCAPERS_AND_DRONES));
+            hasStartedSecondAttack = true;
         }
     }
 }

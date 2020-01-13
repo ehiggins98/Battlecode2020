@@ -5,8 +5,11 @@ import battlecode.common.MapLocation;
 import battlecode.common.RobotController;
 import battlecode.common.RobotType;
 import jers.Goal;
+import jers.Messages.*;
 import jers.Messages.InitialGoalMessage;
 import jers.Messages.RobotBuiltMessage;
+
+import java.util.ArrayList;
 
 import static jers.Constants.*;
 
@@ -16,6 +19,9 @@ public class FulfillmentCenter extends Robot {
     private boolean buildDrone;
     private InitialGoalMessage initialGoalMessage;
     private RobotBuiltMessage robotBuiltMessage;
+    private LandscaperLocationMessage landscaperLocatedMessage;
+    private MapLocation locationOfLandscaper = null;
+    private int roundLastUpdated;
 
     public FulfillmentCenter(RobotController rc) throws GameActionException {
         super(rc);
@@ -23,13 +29,18 @@ public class FulfillmentCenter extends Robot {
         buildDrone = true;
         goal = Goal.BUILD_INITIAL_DRONES;
         myHQ = checkRobotBuiltInRange(1, 20, RobotType.HQ);
+        roundLastUpdated = rc.getRoundNum();
     }
 
 
     @Override
     public void run(int roundNum) throws GameActionException {
+        goal = getGoalFromMessage();
         switch (goal) {
             case IDLE:
+                break;
+            case WAITING_FOR_COMPLETION:
+                transactor.submitTransaction(new RequestCompletedMessage(new RobotType[] {RobotType.HQ}, Goal.ALL));
                 break;
             case BUILD_INITIAL_DRONES:
                 buildInitialDrones(roundNum);
@@ -56,7 +67,7 @@ public class FulfillmentCenter extends Robot {
 
             dronesBuilt += 1;
             initialGoalMessage = new InitialGoalMessage(new RobotType[]{RobotType.DELIVERY_DRONE},
-                    Goal.ALL, builtAt, roundNum, dronesBuilt > INITIAL_ATTACKING_DRONES ? Goal.FIND_ENEMY_HQ : Goal.DEFEND_HQ);
+                    Goal.ALL, builtAt, roundNum, dronesBuilt > INITIAL_ATTACKING_DRONES ? Goal.FIND_ENEMY_HQ : Goal.GO_TO_MY_HQ);
         }
 
         if (initialGoalMessage != null && transactor.submitTransaction(initialGoalMessage)) {
@@ -64,8 +75,9 @@ public class FulfillmentCenter extends Robot {
             initialGoalMessage = null;
         }
 
-        if (dronesBuilt > INITIAL_ATTACKING_DRONES + INITIAL_DEFENDING_DRONES) {
+        if (dronesBuilt > INITIAL_ATTACKING_DRONES + INITIAL_DEFENDING_DRONES - 1) {
             goal = Goal.IDLE;
+            roundLastUpdated = rc.getRoundNum();
             buildDrone = false;
         }
     }
@@ -76,21 +88,22 @@ public class FulfillmentCenter extends Robot {
      * @throws GameActionException
      */
     public void buildLandscapersAndDrones(int roundNum) throws GameActionException {
-        MapLocation locationOfPreviousLandscaper = checkRobotBuiltInRound(roundNum - 1, RobotType.LANDSCAPER);
-        if (buildDrone && dronesBuilt < INITIAL_ATTACKING_DRONES + INITIAL_DEFENDING_DRONES + DRONE_LANDSCAPER_PAIRS) {
+        locationOfLandscaper = lookForLandscaper(roundNum);
+        if (locationOfLandscaper != null && dronesBuilt < INITIAL_ATTACKING_DRONES + INITIAL_DEFENDING_DRONES + DRONE_LANDSCAPER_PAIRS) {
             MapLocation builtAt = makeRobot(RobotType.DELIVERY_DRONE);
             if (builtAt == null) {
                 return;
             }
 
-            buildDrone = false;
+            System.out.println("Built drone for second wave");
             dronesBuilt += 1;
-            /*initialGoalMessage = new InitialGoalMessage(new RobotType[]{RobotType.DELIVERY_DRONE},
-                    Goal.ALL, builtAt, roundNum, Goal.ATTACK_ENEMY_HQ);*/
-            robotBuiltMessage = new RobotBuiltMessage(new RobotType[]{RobotType.HQ, RobotType.MINER},
+            initialGoalMessage = new InitialGoalMessage(new RobotType[]{RobotType.DELIVERY_DRONE},
+                    Goal.ALL, builtAt, roundNum, Goal.PICK_UP_LANDSCAPER);
+            robotBuiltMessage = new RobotBuiltMessage(new RobotType[]{RobotType.HQ, RobotType.DESIGN_SCHOOL},
                     Goal.ALL, builtAt, RobotType.DELIVERY_DRONE);
-        } else if (!buildDrone && checkRobotBuiltInRound(roundNum - 1, RobotType.LANDSCAPER) != null) {
-            buildDrone = true;
+            landscaperLocatedMessage = new LandscaperLocationMessage(new RobotType[]{RobotType.DELIVERY_DRONE},
+                    Goal.PICK_UP_LANDSCAPER, locationOfLandscaper);
+            locationOfLandscaper = null;
         }
 
         if (initialGoalMessage != null && transactor.submitTransaction(initialGoalMessage)) {
@@ -100,5 +113,40 @@ public class FulfillmentCenter extends Robot {
         if (robotBuiltMessage != null && transactor.submitTransaction(robotBuiltMessage)) {
             robotBuiltMessage = null;
         }
+
+        if (landscaperLocatedMessage != null && transactor.submitTransaction(landscaperLocatedMessage)) {
+            landscaperLocatedMessage = null;
+        }
+
+    }
+
+    public MapLocation lookForLandscaper(int roundNum) throws GameActionException {
+        for (int i = roundLastUpdated; i < roundNum; i++) {
+            ArrayList<Message> messages = transactor.getBlock(i, goal);
+            for (Message message : messages) {
+                if (message.getMessageType().equals(MessageType.ROBOT_BUILT)) {
+                    System.out.println("Found an update");
+                    if (((RobotBuiltMessage) message).getRobotType() == RobotType.LANDSCAPER) {
+                        System.out.println("It was good");
+                        roundLastUpdated = roundNum;
+                        return ((RobotBuiltMessage) message).getRobotLocation();
+                    }
+                }
+            }
+        }
+
+
+        return locationOfLandscaper;
+    }
+
+    public Goal getGoalFromMessage() throws GameActionException {
+        ArrayList<Message> messages = transactor.getBlock(rc.getRoundNum()-1, goal);
+        for (Message message : messages) {
+            if (message.getMessageType().equals(MessageType.CHANGE_GOAL)) {
+                return ((ChangeGoalMessage) message).getChangeGoalTo();
+            }
+        }
+
+        return goal;
     }
 }

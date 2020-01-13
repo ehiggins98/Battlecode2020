@@ -65,6 +65,12 @@ public class Transactor {
                     messages.add(new SoupFoundMessage(msg, 3));
                 } else if (msg[2] == MessageType.WATER_FOUND.id) {
                     messages.add(new WaterFoundMessage(msg, 3));
+                } else if (msg[2] == MessageType.CHANGE_GOAL.id) {
+                    messages.add(new ChangeGoalMessage(msg, 3));
+                } else if (msg[2] == MessageType.REQUEST_COMPLETED.id) {
+                    messages.add(new RequestCompletedMessage(msg, 3));
+                } else if (msg[2] == MessageType.LANDSCAPER_LOCATED.id) {
+                    messages.add(new LandscaperLocationMessage(msg, 3));
                 }
             }
         }

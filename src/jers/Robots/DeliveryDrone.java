@@ -22,6 +22,8 @@ public class DeliveryDrone extends Robot {
     int startupLastRoundChecked = 0;
     private Goal initialGoal;
     private Random random;
+    private MapLocation pickupLandscaper;
+    private int roundLastUpdated;
 
     public DeliveryDrone(RobotController rc) throws GameActionException {
         super(rc);
@@ -30,6 +32,8 @@ public class DeliveryDrone extends Robot {
         waterLocations = new ArrayList<>();
         waterFoundMessages = new ArrayList<>();
         goal = Goal.STARTUP;
+        pickupLandscaper = null;
+        roundLastUpdated = rc.getRoundNum();
     }
 
     public void run(int roundNum) throws GameActionException {
@@ -79,6 +83,9 @@ public class DeliveryDrone extends Robot {
                     break;
                 case DESTROY_UNIT:
                     destroyUnit();
+                    break;
+                case PICK_UP_LANDSCAPER:
+                    pickUpLandscaper(roundNum);
                     break;
                 default:
                     throw new IllegalStateException("Invalid goal for landscaper " + goal);
@@ -142,7 +149,10 @@ public class DeliveryDrone extends Robot {
             pathFinder.setGoal(theirHQ);
         }
         pathFinder.move(false, true);
-        if (rc.getLocation().distanceSquaredTo(theirHQ) < 9) {
+        if (rc.getLocation().distanceSquaredTo(theirHQ) <= 9) {
+            if (rc.isCurrentlyHoldingUnit()) {
+                rc.dropUnit(findUnoccupiedDropLocation(false));
+            }
             goal = Goal.ATTACK_UNITS;
             return;
         }
@@ -231,6 +241,41 @@ public class DeliveryDrone extends Robot {
         }
     }
 
+    public MapLocation lookForLandscaper(int roundNum) throws GameActionException {
+        for (int i = roundLastUpdated-1; i < roundNum; i++) {
+            ArrayList<Message> messages = transactor.getBlock(i, goal);
+            for (Message message : messages) {
+                System.out.println("Reading this");
+                if (message.getMessageType().equals(MessageType.LANDSCAPER_LOCATED)) {
+                    System.out.println("Was a landscaper");
+                    return((LandscaperLocationMessage) message).getLocation();
+                }
+            }
+        }
+
+
+        return pickupLandscaper;
+    }
+    private void pickUpLandscaper(int roundNum) throws GameActionException {
+        if (pickupLandscaper == null)
+        {
+            pickupLandscaper = lookForLandscaper(roundNum);
+            pathFinder.setGoal(pickupLandscaper);
+            return;
+        }
+
+        if (rc.isReady()) {
+            pathFinder.move(false, true);
+            if (pathFinder.isFinished()) {
+                //TODO: Drone will see unit picked up by other drone and try to follow it
+                // We need to figure out if the target is being carried by a drone before other drone is adjacent.
+                rc.pickUpUnit(rc.senseRobotAtLocation(pickupLandscaper).getID());
+                goal = Goal.FIND_ENEMY_HQ;
+            }
+        }
+
+    }
+
     private void findWater() throws GameActionException {
         if (pathFinder.getGoal() == null || pathFinder.isFinished()) {
             MapLocation newGoal = new MapLocation(random.nextInt(rc.getMapWidth()), random.nextInt(rc.getMapHeight()));
@@ -249,7 +294,7 @@ public class DeliveryDrone extends Robot {
 
     private void destroyUnit() throws GameActionException {
         if (pathFinder.isFinished()) {
-            Direction dropDirection = findUnoccupiedDropLocation();
+            Direction dropDirection = findUnoccupiedDropLocation(true);
             if (dropDirection == null) {
                 return;
             }
@@ -263,12 +308,19 @@ public class DeliveryDrone extends Robot {
         }
     }
 
-    private Direction findUnoccupiedDropLocation() throws GameActionException {
+    private Direction findUnoccupiedDropLocation(boolean toDestroy) throws GameActionException {
         MapLocation loc = rc.getLocation();
         for (Direction dir: Direction.values()) {
             MapLocation newLoc = loc.add(dir);
-            if (rc.senseFlooding(newLoc) && !rc.isLocationOccupied(newLoc)) {
-                return dir;
+            if (toDestroy) {
+                if (rc.senseFlooding(newLoc) && !rc.isLocationOccupied(newLoc)) {
+                    return dir;
+                }
+            }
+            else {
+                if (!rc.isLocationOccupied(newLoc)) {
+                    return dir;
+                }
             }
         }
 

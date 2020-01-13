@@ -22,7 +22,10 @@ public enum Goal {
     GO_TO_ENEMY_HQ(19), // Drone
     FIND_WATER(20), // Drone
     GET_INITIAL_GOAL(21), // Drone
-    ALL(22);
+    PICK_UP_LANDSCAPER(22), //Drones
+    WAITING_FOR_COMPLETION(23), // All
+    REQUEST_LANDSCAPERS_AND_DRONES(24), // HQ
+    ALL(25);
 
     private final int id;
     private Goal(int id) {
