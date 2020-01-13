@@ -71,6 +71,7 @@ public class Miner extends Robot {
         Goal lastGoal = null;
 
         while (rc.isReady() && lastGoal != goal) {
+            System.out.println(goal);
             lastGoal = goal;
             switch (goal) {
                 case IDLE:
@@ -153,8 +154,6 @@ public class Miner extends Robot {
 
         if (rc.getSoupCarrying() >= RobotType.MINER.soupLimit && rc.isReady()) {
             goal = Goal.REFINE;
-            MapLocation refinery = findOrBuildRefinery();
-            pathFinder.setGoal(getOpenTileAdjacent(refinery, refinery.directionTo(rc.getLocation()), Constants.directions, false));
         } else {
             if (rc.canSenseLocation(soupLocations.get(0)) && rc.senseSoup(soupLocations.get(0)) == 0) {
                 goal = Goal.IDLE;
@@ -182,8 +181,6 @@ public class Miner extends Robot {
 
     // Go to the HQ and dump all our soup in, then go back to mining.
     private void refine() throws GameActionException {
-        pathFinder.move(false, false);
-
         for (MapLocation refinery : refineryLocations) {
             if (rc.getLocation().isAdjacentTo(refinery)) {
                 Direction dirToRefinery = rc.getLocation().directionTo(refinery);
@@ -194,6 +191,12 @@ public class Miner extends Robot {
                 }
             }
         }
+
+        if (pathFinder.getGoal() == null || pathFinder.isFinished()) {
+            MapLocation refinery = findOrBuildRefinery();
+            pathFinder.setGoal(getOpenTileAdjacent(refinery, refinery.directionTo(rc.getLocation()), Constants.directions, false));
+        }
+        pathFinder.move(false, false);
     }
 
     // Walk semi-randomly around the map until we see soup. This just generates random goals at most MAX_EXPLORE_DELTA
