@@ -146,6 +146,7 @@ public class DeliveryDrone extends Robot {
                     case UNIT_PICKED_UP:
                         UnitPickedUpMessage unitPickedUpMessage = (UnitPickedUpMessage) m;
                         pickedUpUnits.add(unitPickedUpMessage.getUnitId());
+                        break;
                 }
             }
         }
@@ -399,11 +400,18 @@ public class DeliveryDrone extends Robot {
                     WaterFoundMessage waterFoundMessage = (WaterFoundMessage) m;
                     waterLocations.add(waterFoundMessage.getLocation());
                     break;
+                case UNIT_PICKED_UP:
+                    UnitPickedUpMessage unitPickedUpMessage = (UnitPickedUpMessage) m;
+                    pickedUpUnits.add(unitPickedUpMessage.getUnitId());
+                    break;
             }
         }
 
         if (!waterFoundMessages.isEmpty() && transactor.submitTransaction(waterFoundMessages.get(0))) {
             waterFoundMessages.remove(0);
+        }
+        if (!pickedUpUnitMessages.isEmpty() && transactor.submitTransaction(pickedUpUnitMessages.get(0))) {
+            pickedUpUnitMessages.remove(0);
         }
     }
 
