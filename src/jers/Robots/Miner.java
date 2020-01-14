@@ -16,28 +16,26 @@ import static jers.Constants.LANDSCAPERS_FOR_WALL;
 public class Miner extends Robot {
     private PathFinder pathFinder;
     private Transactor transactor;
-    private MapLocation designSchoolLocation = null;
-    private List<MapLocation> refineryLocations = null;
-    private List<MapLocation> fulfillmentLocations = null;
-    private List<MapLocation> soupLocations = null;
-    private List<RobotBuiltMessage> robotBuiltMessages;
-    private NeedRefineryMessage needRefineryMessage;
+    private List<RobotInfo> buildings;
+    private List<MapLocation> soupLocations;
     private HashSet<MapLocation> sharedSoupLocations;
     private Random random;
     private int landscapersBuilt;
     private int startupLastRoundChecked = 0;
-
-    boolean soupFoundTransactionNeeded = false;
+    private Goal initialGoal;
+    private MapLocation theirHQ;
+    private MapLocation[] theirHQPossibilities;
+    private int hqTry;
+    private Queue<Message> messageQueue;
 
     public Miner(RobotController rc) throws GameActionException {
         super(rc);
 
-        refineryLocations = new ArrayList<>();
-        fulfillmentLocations = new ArrayList<>();
+        buildings = new ArrayList<>();
         pathFinder = new PathFinder(rc);
         transactor = new Transactor(rc);
         soupLocations = new ArrayList<>();
-        robotBuiltMessages = new ArrayList<>();
+        messageQueue = new LinkedList<>();
         sharedSoupLocations = new HashSet<>();
         random = new Random();
         goal = Goal.STARTUP;
@@ -61,13 +59,17 @@ public class Miner extends Robot {
 
         Goal lastGoal = null;
         readBlockchain(roundNum);
-        makeBuildings();
 
         while (rc.isReady() && lastGoal != goal) {
+            if (rc.getID() == 10964) {
+                System.out.println(goal);
+            }
             lastGoal = goal;
             switch (goal) {
                 case IDLE:
-                    idle();
+                    break;
+                case FIND_NEW_SOUP:
+                    findNewSoup();
                     break;
                 case MINE:
                     mine();
@@ -78,8 +80,23 @@ public class Miner extends Robot {
                 case EXPLORE:
                     explore();
                     break;
+                case FIND_ENEMY_HQ:
+                    findEnemyHQ();
+                    break;
+                case GO_TO_ENEMY_HQ:
+                    goToEnemyHQ();
+                    break;
                 case BUILD_REFINERY:
-                    buildRefinery();
+                    makeBuilding(REFINERY, Goal.FIND_NEW_SOUP);
+                    break;
+                case BUILD_NET_GUN:
+                    makeBuilding(NET_GUN, Goal.IDLE);
+                    break;
+                case BUILD_DESIGN_SCHOOL:
+                    makeBuilding(DESIGN_SCHOOL, Goal.FIND_NEW_SOUP);
+                    break;
+                case BUILD_FULFILLMENT_CENTER:
+                    makeBuilding(FULFILLMENT_CENTER, Goal.FIND_NEW_SOUP);
                     break;
                 default:
                     throw new IllegalStateException("Invalid goal for miner " + goal);
@@ -91,36 +108,44 @@ public class Miner extends Robot {
 
     private void startUp(int roundNum) throws GameActionException {
         if (startupLastRoundChecked >= roundNum - 2) {
-            goal = Goal.IDLE;
+            goal = initialGoal != null ? initialGoal : Goal.GET_INITIAL_GOAL;
             return;
         }
 
         while (startupLastRoundChecked < roundNum - 1 && Clock.getBytecodesLeft() > 600) {
             ArrayList<Message> messages = transactor.getBlock(++startupLastRoundChecked, goal);
             for (Message m : messages) {
-                if (m.getMessageType() == MessageType.ROBOT_BUILT) {
-                    RobotBuiltMessage message = (RobotBuiltMessage) m;
-                    switch (message.getRobotType()) {
-                        case REFINERY:
-                            refineryLocations.add(message.getRobotLocation());
-                            break;
-                        case DESIGN_SCHOOL:
-                            designSchoolLocation = message.getRobotLocation();
-                            break;
-                        case FULFILLMENT_CENTER:
-                            fulfillmentLocations.add(message.getRobotLocation());
-                            break;
-                        case LANDSCAPER:
-                            landscapersBuilt++;
-                            break;
-                        case HQ:
-                            myHQ = message.getRobotLocation();
-                            refineryLocations.add(myHQ);
-                            break;
-                    }
-                } else if (m.getMessageType() == MessageType.SOUP_FOUND) {
-                    SoupFoundMessage message = (SoupFoundMessage) m;
-                    soupLocations.add(message.getLocation());
+                switch (m.getMessageType()) {
+                    case ROBOT_BUILT:
+                        RobotBuiltMessage robotBuiltMessage = (RobotBuiltMessage) m;
+                        switch (robotBuiltMessage.getRobotType()) {
+                            case REFINERY:
+                            case DESIGN_SCHOOL:
+                            case FULFILLMENT_CENTER:
+                            case NET_GUN:
+                                buildings.add(new RobotInfo(-1, rc.getTeam(), robotBuiltMessage.getRobotType(), robotBuiltMessage.getRobotLocation()));
+                                break;
+                            case LANDSCAPER:
+                                landscapersBuilt++;
+                                break;
+                            case HQ:
+                                myHQ = robotBuiltMessage.getRobotLocation();
+                                theirHQPossibilities = calculateEnemyHQLocations(myHQ);
+                                buildings.add(new RobotInfo(-1, rc.getTeam(), HQ, robotBuiltMessage.getRobotLocation()));
+                                break;
+                        }
+                        break;
+                    case SOUP_FOUND:
+                        SoupFoundMessage soupFoundMessage = (SoupFoundMessage) m;
+                        soupLocations.add(soupFoundMessage.getLocation());
+                        break;
+                    case INITIAL_GOAL:
+                        InitialGoalMessage initialGoalMessage = (InitialGoalMessage) m;
+                        if (initialGoalMessage.getInitialLocation().equals(rc.getLocation()) &&
+                                initialGoalMessage.getRoundCreated() == createdOnRound) {
+                            initialGoal = initialGoalMessage.getInitialGoal();
+                        }
+                        break;
                 }
             }
         }
@@ -128,12 +153,11 @@ public class Miner extends Robot {
 
     // Execute the idle strategy - if we know where soup is, go there, otherwise look for soup in the vicinity, and
     // otherwise explore.
-    private void idle() throws GameActionException {
+    private void findNewSoup() throws GameActionException {
         MapLocation loc = findSoup();
         if (loc != null && !soupLocations.contains(loc)) {
             soupLocations.add(loc);
         }
-
 
         if (!soupLocations.isEmpty()) {
             goal = setMiningGoal();
@@ -150,7 +174,7 @@ public class Miner extends Robot {
             goal = Goal.REFINE;
         } else {
             if (rc.canSenseLocation(soupLocations.get(0)) && rc.senseSoup(soupLocations.get(0)) == 0) {
-                goal = Goal.IDLE;
+                goal = Goal.FIND_NEW_SOUP;
                 soupLocations.remove(0);
             }
 
@@ -160,24 +184,28 @@ public class Miner extends Robot {
                     && rc.canMineSoup(rc.getLocation().directionTo(soupLocations.get(0)))) {
                 if (!sharedSoupLocations.contains(soupLocations.get(0)) && farFromAllSharedSoup(soupLocations.get(0))) {
                     sharedSoupLocations.add(soupLocations.get(0));
-                    soupFoundTransactionNeeded = true;
+                    messageQueue.add(new SoupFoundMessage(new RobotType[]{MINER}, Goal.ALL, soupLocations.get(0)));
                 }
 
                 rc.mineSoup(rc.getLocation().directionTo(soupLocations.get(0)));
-            } else {
-                goal = Goal.IDLE;
+            } else if (pathFinder.isFinished()) {
+                goal = Goal.FIND_NEW_SOUP;
             }
         }
     }
 
     // Go to the HQ and dump all our soup in, then go back to mining.
     private void refine() throws GameActionException {
-        for (MapLocation refinery : refineryLocations) {
-            if (rc.getLocation().isAdjacentTo(refinery)) {
-                Direction dirToRefinery = rc.getLocation().directionTo(refinery);
+        for (RobotInfo building : buildings) {
+            if (building.getType() != REFINERY && building.getType() != HQ) {
+                continue;
+            }
+
+            if (rc.getLocation().isAdjacentTo(building.getLocation())) {
+                Direction dirToRefinery = rc.getLocation().directionTo(building.getLocation());
                 if (rc.canDepositSoup(dirToRefinery)) {
                     rc.depositSoup(dirToRefinery, rc.getSoupCarrying());
-                    goal = Goal.IDLE;
+                    goal = Goal.FIND_NEW_SOUP;
                     break;
                 }
             }
@@ -212,38 +240,62 @@ public class Miner extends Robot {
         }
     }
 
-    // Go far enough away from the HQ and build a refinery.
-    private void buildRefinery() throws GameActionException {
-        MapLocation builtAt = makeBuilding(REFINERY);
-        if (builtAt != null) {
-            refineryLocations.add(builtAt);
-            goal = rc.getSoupCarrying() >= RobotType.MINER.soupLimit ? Goal.REFINE : Goal.MINE;
-            robotBuiltMessages.add(new RobotBuiltMessage(new RobotType[]{RobotType.MINER}, Goal.ALL, builtAt, REFINERY));
+    // Find the enemy HQ. We know the map is horizontally, vertically, or rotationally symmetric, so we have only
+    // three locations where it can be. Thus, we try these possibilities until we find the HQ, then switch to
+    // the attack goal.
+    private void findEnemyHQ() throws GameActionException {
+        if (theirHQ != null) {
+            goal = Goal.GO_TO_ENEMY_HQ;
+            return;
+        }
+
+        if (pathFinder.getGoal() == null || (pathFinder.isFinished() && !canSeeEnemyHQ())) {
+            if (hqTry < 3) {
+                pathFinder.setGoal(theirHQPossibilities[hqTry].subtract(rc.getLocation().directionTo(theirHQPossibilities[hqTry])));
+                hqTry++;
+            } else {
+                // We can't get to the enemy HQ
+                goal = Goal.FIND_NEW_SOUP;
+            }
+        } else if (pathFinder.isFinished() && canSeeEnemyHQ()) {
+            if (rc.getLocation().isAdjacentTo(theirHQPossibilities[hqTry - 1])) {
+                if (!hasBuiltUnit(NET_GUN)) {
+                    goal = Goal.BUILD_NET_GUN;
+                }
+
+                theirHQ = theirHQPossibilities[hqTry-1];
+                messageQueue.add(new HqFoundMessage(new RobotType[]{RobotType.LANDSCAPER, RobotType.DELIVERY_DRONE,
+                        RobotType.FULFILLMENT_CENTER, RobotType.DESIGN_SCHOOL}, Goal.ALL, theirHQ));
+            } else {
+                MapLocation newGoal = getOpenTileAdjacent(theirHQPossibilities[hqTry-1],
+                        theirHQPossibilities[hqTry-1].directionTo(rc.getLocation()), Constants.directions, false);
+
+                if (newGoal == null) {
+                    goal = Goal.FIND_NEW_SOUP;
+                } else {
+                    pathFinder.setGoal(newGoal);
+                }
+            }
+        }
+        if (rc.isReady()) {
+            pathFinder.move(false, false, myHQ);
         }
     }
 
-    // Checks whether we need to build a building, and builds one if we do.
-    private void makeBuildings() throws GameActionException {
-        if (rc.getTeamSoup() > REFINERY.cost && refineryLocations.size() == 1) {
-            goal = Goal.BUILD_REFINERY;
+    private void goToEnemyHQ() throws GameActionException {
+        boolean nearHQ = canSeeEnemyHQ();
+        if (!theirHQ.equals(pathFinder.getGoal()) && !canSeeEnemyHQ()) {
+            pathFinder.setGoal(theirHQ);
+        } else if (!pathFinder.isFinished() && nearHQ) {
+            MapLocation goal = getOpenTileAdjacent(theirHQ, theirHQ.directionTo(rc.getLocation()), Constants.directions, false);
+            if (goal != null) {
+                pathFinder.setGoal(goal);
+            }
+        } else if (nearHQ && !hasBuiltUnit(NET_GUN)) {
+            goal = Goal.BUILD_NET_GUN;
         }
 
-        if (refineryLocations.size() > 1 && designSchoolLocation == null && rc.getTeamSoup() >= DESIGN_SCHOOL.cost) {
-            MapLocation loc = makeBuilding(DESIGN_SCHOOL);
-            if (loc != null) {
-                designSchoolLocation = loc;
-                robotBuiltMessages.add(new RobotBuiltMessage(new RobotType[]{RobotType.MINER, RobotType.HQ}, Goal.ALL, designSchoolLocation, DESIGN_SCHOOL));
-            }
-        }
-
-        if (refineryLocations.size() > 1 && designSchoolLocation != null && fulfillmentLocations.size() < 1 &&
-                rc.getTeamSoup() >= FULFILLMENT_CENTER.cost && landscapersBuilt >= INITIAL_ATTACKING_LANDSCAPERS + LANDSCAPERS_FOR_WALL)  {
-            MapLocation loc = makeBuilding(FULFILLMENT_CENTER);
-            if (loc != null) {
-                fulfillmentLocations.add(loc);
-                robotBuiltMessages.add(new RobotBuiltMessage(new RobotType[]{RobotType.MINER, RobotType.HQ}, Goal.ALL, loc, FULFILLMENT_CENTER));
-            }
-        }
+        pathFinder.move(false, false, myHQ);
     }
 
     // Stuff that needs to be done regardless of our goal.
@@ -256,19 +308,14 @@ public class Miner extends Robot {
                     switch (message.getRobotType()) {
                         case HQ:
                             myHQ = message.getRobotLocation();
-                            refineryLocations.add(myHQ);
+                            theirHQPossibilities = calculateEnemyHQLocations(myHQ);
+                            buildings.add(new RobotInfo(-1, rc.getTeam(), HQ, message.getRobotLocation()));
                             break;
                         case REFINERY:
-                            refineryLocations.add(message.getRobotLocation());
-                            if (goal == Goal.BUILD_REFINERY) {
-                                goal = Goal.IDLE;
-                            }
-                            break;
                         case DESIGN_SCHOOL:
-                            designSchoolLocation = message.getRobotLocation();
-                            break;
                         case FULFILLMENT_CENTER:
-                            fulfillmentLocations.add(message.getRobotLocation());
+                        case NET_GUN:
+                            buildings.add(new RobotInfo(-1, rc.getTeam(), message.getRobotType(), message.getRobotLocation()));
                             break;
                         case LANDSCAPER:
                             landscapersBuilt++;
@@ -278,39 +325,40 @@ public class Miner extends Robot {
                 case SOUP_FOUND:
                     soupLocations.add(((SoupFoundMessage) m).getLocation());
                     break;
+                case INITIAL_GOAL:
+                    InitialGoalMessage initialGoalMessage = (InitialGoalMessage) m;
+                    if (initialGoalMessage.getInitialLocation().equals(rc.getLocation()) &&
+                            initialGoalMessage.getRoundCreated() == createdOnRound) {
+                        initialGoal = initialGoalMessage.getInitialGoal();
+                        goal = initialGoal;
+                    }
+                    break;
+                case HQ_FOUND:
+                    HqFoundMessage hqFoundMessage = (HqFoundMessage) m;
+                    theirHQ = hqFoundMessage.getLocation();
+                    break;
             }
         }
     }
 
     private void writeBlockchain() throws GameActionException {
-        if (!robotBuiltMessages.isEmpty()) {
-            boolean success = transactor.submitTransaction(robotBuiltMessages.get(0));
+        if (!messageQueue.isEmpty()) {
+            boolean success = transactor.submitTransaction(messageQueue.peek());
             if (success) {
-                robotBuiltMessages.remove(0);
+                messageQueue.poll();
             }
-        }
-
-        if (soupFoundTransactionNeeded) {
-            if (soupLocations.isEmpty()) {
-                soupFoundTransactionNeeded = false;
-            } else {
-                soupFoundTransactionNeeded = !transactor.submitTransaction(new SoupFoundMessage(new RobotType[]{RobotType.MINER}, Goal.ALL, soupLocations.get(0)));
-            }
-        }
-
-        if (needRefineryMessage != null && transactor.submitTransaction(needRefineryMessage)) {
-            needRefineryMessage = null;
         }
     }
 
     // Make a building. This ensures we don't put the building in water, that it's not on top of soup, and that it's far enough away
     // from the HQ (just so the building doesn't interfere with building a wall around the HQ.
-    private MapLocation makeBuilding(RobotType type) throws GameActionException {
+    private MapLocation makeBuilding(RobotType type, Goal nextGoal) throws GameActionException {
         for (Direction d : Direction.allDirections()) {
             MapLocation buildAt = rc.getLocation().add(d);
             if (rc.canBuildRobot(type, d) && !rc.senseFlooding(buildAt) && rc.senseSoup(buildAt) == 0 && buildAt.distanceSquaredTo(myHQ) >= 9) {
                 rc.buildRobot(type, d);
-                return buildAt;
+                messageQueue.add(new RobotBuiltMessage(new RobotType[]{MINER}, Goal.ALL, buildAt, type));
+                goal = nextGoal;
             }
         }
 
@@ -367,29 +415,34 @@ public class Miner extends Robot {
     }
 
     private MapLocation findOrBuildRefinery() throws GameActionException {
-        if (refineryLocations.size() == 1) {
-            return refineryLocations.get(0);
+        MapLocation closest = null;
+        int minDist = Integer.MAX_VALUE;
+        boolean hasRefinery = false;
+
+        for (RobotInfo building : buildings) {
+            if (building.getType() == REFINERY) {
+                hasRefinery = true;
+            }
         }
 
-        MapLocation closest = null;
-        int minDist = 0;
-        for (MapLocation loc : refineryLocations) {
-            if (!loc.equals(myHQ) && (closest == null || rc.getLocation().distanceSquaredTo(loc) < minDist)) {
-                minDist = rc.getLocation().distanceSquaredTo(loc);
-                closest = loc;
+        for (RobotInfo building : buildings) {
+            if (building.getType() != REFINERY && building.getType() != HQ) {
+                continue;
+            }
+
+            if ((!hasRefinery || !building.getLocation().equals(myHQ)) &&
+                    rc.getLocation().distanceSquaredTo(building.getLocation()) < minDist) {
+                minDist = rc.getLocation().distanceSquaredTo(building.getLocation());
+                closest = building.getLocation();
             }
         }
 
         if (rc.getLocation().distanceSquaredTo(closest) > Constants.FAR_THRESHOLD_RADIUS_SQUARED &&
                 landscapersBuilt >= INITIAL_ATTACKING_LANDSCAPERS + LANDSCAPERS_FOR_WALL) {
             if (rc.getTeamSoup() < REFINERY.cost) {
-                needRefineryMessage = new NeedRefineryMessage(new RobotType[]{DESIGN_SCHOOL, FULFILLMENT_CENTER}, Goal.ALL);
+                messageQueue.add(new NeedRefineryMessage(new RobotType[]{DESIGN_SCHOOL, FULFILLMENT_CENTER}, Goal.ALL));
             } else {
-                MapLocation builtAt = makeBuilding(REFINERY);
-                if (builtAt != null) {
-                    robotBuiltMessages.add(new RobotBuiltMessage(new RobotType[]{RobotType.MINER}, Goal.ALL, builtAt, REFINERY));
-                    return builtAt;
-                }
+                goal = Goal.BUILD_REFINERY;
             }
         }
 
@@ -404,5 +457,67 @@ public class Miner extends Robot {
         }
 
         return true;
+    }
+
+    // Check if we can see the enemy HQ.
+    private boolean canSeeEnemyHQ() throws GameActionException {
+        RobotInfo[] robots = rc.senseNearbyRobots();
+        for (RobotInfo info : robots) {
+            if (info.getType() == RobotType.HQ && info.getTeam() == rc.getTeam().opponent()) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // Calculate possible locations of the enemy HQ, given that the map is horizontally, vertically, or rotationally
+    // symmetric.
+    private MapLocation[] calculateEnemyHQLocations(MapLocation myHQ) {
+        ArrayList<MapLocation> locations = new ArrayList<MapLocation>(3);
+        // Vertical axis of symmetry
+        locations.add(new MapLocation(rc.getMapWidth() - myHQ.x - 1, myHQ.y));
+        // Horizontal axis of symmetry
+        locations.add(new MapLocation(myHQ.x, rc.getMapHeight() - myHQ.y - 1));
+        // Rotationally symmetric
+        locations.add(new MapLocation(rc.getMapWidth() - myHQ.x - 1, rc.getMapHeight() - myHQ.y - 1));
+
+        // Sort them so that we take the most efficient path between the 3.
+        MapLocation[] sorted = new MapLocation[3];
+        int added = 0;
+
+        while (added < 3) {
+            int minDist = Integer.MAX_VALUE;
+            int argmin = 0;
+            for (int i = 0; i < locations.size(); i++) {
+                int dist;
+                if (added == 0) {
+                    dist = rc.getLocation().distanceSquaredTo(locations.get(i));
+                } else {
+                    dist = sorted[added-1].distanceSquaredTo(locations.get(i));
+                }
+
+                if (dist < minDist) {
+                    minDist = dist;
+                    argmin = i;
+                }
+            }
+
+            sorted[added] = locations.get(argmin);
+            locations.remove(argmin);
+            added++;
+        }
+
+        return sorted;
+    }
+
+    private boolean hasBuiltUnit(RobotType type) {
+        for (RobotInfo b : buildings) {
+            if (b.getType() == type) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

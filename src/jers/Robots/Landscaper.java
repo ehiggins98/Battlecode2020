@@ -22,7 +22,6 @@ public class Landscaper extends Robot {
     public Landscaper(RobotController rc) throws GameActionException {
         super(rc);
         myHQ = checkRobotBuiltInRange(1, 20, RobotType.HQ);
-        theirHQPossibilities = calculateEnemyHQLocations(myHQ);
         hqTry = 0;
         pathFinder = new PathFinder(rc);
         goal = Goal.STARTUP;
@@ -51,12 +50,6 @@ public class Landscaper extends Robot {
             switch (goal) {
                 case IDLE:
                 case GET_INITIAL_GOAL:
-                    break;
-                case FIND_ENEMY_HQ:
-                    findEnemyHQ();
-                    break;
-                case GO_TO_ENEMY_HQ:
-                    goToEnemyHQ();
                     break;
                 case ATTACK_ENEMY_HQ:
                     attackEnemyHQ();
@@ -100,45 +93,6 @@ public class Landscaper extends Robot {
         }
     }
 
-    // Find the enemy HQ. We know the map is horizontally, vertically, or rotationally symmetric, so we have only
-    // three locations where it can be. Thus, we try these possibilities until we find the HQ, then switch to
-    // the attack goal.
-    private void findEnemyHQ() throws GameActionException {
-        if (theirHQ != null) {
-            goal = Goal.GO_TO_ENEMY_HQ;
-            return;
-        }
-
-        if (pathFinder.getGoal() == null || (pathFinder.isFinished() && !canSeeEnemyHQ())) {
-            if (hqTry < 3) {
-                pathFinder.setGoal(theirHQPossibilities[hqTry].subtract(rc.getLocation().directionTo(theirHQPossibilities[hqTry])));
-                hqTry++;
-            } else {
-                // We can't get to the enemy HQ
-                goal = Goal.IDLE;
-            }
-        } else if (pathFinder.isFinished() && canSeeEnemyHQ()) {
-            if (rc.getLocation().isAdjacentTo(theirHQPossibilities[hqTry - 1])) {
-                goal = Goal.ATTACK_ENEMY_HQ;
-                theirHQ = theirHQPossibilities[hqTry-1];
-                hqFoundMessage = new HqFoundMessage(new RobotType[]{RobotType.LANDSCAPER, RobotType.DELIVERY_DRONE,
-                        RobotType.FULFILLMENT_CENTER, RobotType.DESIGN_SCHOOL}, Goal.ALL, theirHQ);
-            } else {
-                MapLocation newGoal = getOpenTileAdjacent(theirHQPossibilities[hqTry-1],
-                        theirHQPossibilities[hqTry-1].directionTo(rc.getLocation()), Constants.directions, false);
-
-                if (newGoal == null) {
-                    goal = Goal.IDLE;
-                } else {
-                    pathFinder.setGoal(newGoal);
-                }
-            }
-        }
-        if (rc.isReady()) {
-            pathFinder.move(true, false, myHQ);
-        }
-    }
-
     // Try to bury the enemy HQ.
     private void attackEnemyHQ() throws GameActionException {
         Direction hqDir = rc.getLocation().directionTo(theirHQ);
@@ -163,22 +117,6 @@ public class Landscaper extends Robot {
         }
     }
 
-    private void goToEnemyHQ() throws GameActionException {
-        boolean nearHQ = canSeeEnemyHQ();
-        if (!theirHQ.equals(pathFinder.getGoal()) && !canSeeEnemyHQ()) {
-            pathFinder.setGoal(theirHQ);
-        } else if (!pathFinder.isFinished() && nearHQ) {
-            MapLocation goal = getOpenTileAdjacent(theirHQ, theirHQ.directionTo(rc.getLocation()), Constants.directions, false);
-            if (goal != null) {
-                pathFinder.setGoal(goal);
-            }
-        } else if (nearHQ) {
-            goal = Goal.ATTACK_ENEMY_HQ;
-        }
-
-        pathFinder.move(true, false, myHQ);
-    }
-
     // Build the wall. Each landscaper handles 2 tiles.
     private void buildHQWall() throws GameActionException {
         RobotInfo occupier = rc.senseRobotAtLocation(rc.getLocation().add(depositDirection));
@@ -198,66 +136,6 @@ public class Landscaper extends Robot {
         if (digDirection != null && rc.canDigDirt(digDirection)) {
             rc.digDirt(digDirection);
         }
-    }
-
-    // Check if we can see the enemy HQ.
-    private boolean canSeeEnemyHQ() throws GameActionException {
-        int radius = (int)Math.sqrt(rc.getType().sensorRadiusSquared);
-        for (int dx = -radius; dx < radius; dx++) {
-            for (int dy = -radius; dy < radius; dy++) {
-                MapLocation toCheck = rc.getLocation().translate(dx, dy);
-                if (!rc.canSenseLocation(toCheck)) {
-                    continue;
-                }
-
-                RobotInfo info = rc.senseRobotAtLocation(toCheck);
-                if (info != null && info.getType() == RobotType.HQ && info.getTeam() != rc.getTeam()) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
-    }
-
-    // Calculate possible locations of the enemy HQ, given that the map is horizontally, vertically, or rotationally
-    // symmetric.
-    private MapLocation[] calculateEnemyHQLocations(MapLocation myHQ) {
-        ArrayList<MapLocation> locations = new ArrayList<MapLocation>(3);
-        // Vertical axis of symmetry
-        locations.add(new MapLocation(rc.getMapWidth() - myHQ.x - 1, myHQ.y));
-        // Horizontal axis of symmetry
-        locations.add(new MapLocation(myHQ.x, rc.getMapHeight() - myHQ.y - 1));
-        // Rotationally symmetric
-        locations.add(new MapLocation(rc.getMapWidth() - myHQ.x - 1, rc.getMapHeight() - myHQ.y - 1));
-
-        // Sort them so that we take the most efficient path between the 3.
-        MapLocation[] sorted = new MapLocation[3];
-        int added = 0;
-
-        while (added < 3) {
-            int minDist = Integer.MAX_VALUE;
-            int argmin = 0;
-            for (int i = 0; i < locations.size(); i++) {
-                int dist;
-                if (added == 0) {
-                    dist = rc.getLocation().distanceSquaredTo(locations.get(i));
-                } else {
-                    dist = sorted[added-1].distanceSquaredTo(locations.get(i));
-                }
-
-                if (dist < minDist) {
-                    minDist = dist;
-                    argmin = i;
-                }
-            }
-
-            sorted[added] = locations.get(argmin);
-            locations.remove(argmin);
-            added++;
-        }
-
-        return sorted;
     }
 
     // Find the direction in which to dig dirt while building the HQ wall. This will avoid destroying the wall

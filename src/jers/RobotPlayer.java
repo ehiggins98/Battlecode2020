@@ -34,6 +34,9 @@ public strictfp class RobotPlayer {
                 case REFINERY:
                     robot = new Refinery(rc);
                     break;
+                case NET_GUN:
+                    robot = new NetGun(rc);
+                    break;
             }
 
         } catch (Exception e) {

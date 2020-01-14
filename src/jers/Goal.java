@@ -22,7 +22,11 @@ public enum Goal {
     FIND_WATER(20), // Drone
     GET_INITIAL_GOAL(21), // Drone
     ROAM_AROUND(22), // Drone
-    ALL(23);
+    BUILD_NET_GUN(23), // Miner
+    FIND_NEW_SOUP(24), // Miner
+    BUILD_DESIGN_SCHOOL(25), // Miner
+    BUILD_FULFILLMENT_CENTER(26), //Miner
+    ALL(27);
 
     private final int id;
     private Goal(int id) {

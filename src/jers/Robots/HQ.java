@@ -3,15 +3,17 @@ package jers.Robots;
 import battlecode.common.*;
 import jers.Constants;
 import jers.Goal;
+import jers.Messages.InitialGoalMessage;
 import jers.Messages.RobotBuiltMessage;
 
 public class HQ extends Robot {
-    private final int INITIAL_MINER_COUNT = 5;
-    private final int SECOND_MINER_COUNT = 12;
+    private final int INITIAL_MINING_MINERS = 5;
+    private final int INITIAL_ATTACKING_MINERS = 2;
     private boolean buildMiner = true;
     private boolean locationBroadcast = false;
     private int minersBuilt;
     private RobotBuiltMessage robotBuiltMessage;
+    private InitialGoalMessage initialGoalMessage;
 
 
     public HQ(RobotController rc) throws GameActionException {
@@ -34,7 +36,7 @@ public class HQ extends Robot {
             case IDLE:
                 break;
             case BUILD_INITIAL_MINERS:
-                buildInitialMiners();
+                buildInitialMiners(roundNum);
                 break;
             case BUILD_LANDSCAPERS_AND_MINERS:
                 buildLandscapersAndMiners(roundNum);
@@ -46,14 +48,18 @@ public class HQ extends Robot {
         writeBlockchain();
     }
 
-    private void buildInitialMiners() throws GameActionException {
+    private void buildInitialMiners(int roundNum) throws GameActionException {
         if (rc.isReady() && rc.getTeamSoup() > RobotType.MINER.cost) {
-            makeRobot(RobotType.MINER);
-            minersBuilt += 1;
+            MapLocation builtAt = makeRobot(RobotType.MINER);
+            if (builtAt != null) {
+                Goal initialGoal = minersBuilt >= INITIAL_MINING_MINERS ? Goal.FIND_ENEMY_HQ : Goal.FIND_NEW_SOUP;
+                initialGoalMessage = new InitialGoalMessage(new RobotType[]{RobotType.MINER}, Goal.ALL, builtAt, roundNum, initialGoal);
+                minersBuilt++;
+            }
         }
 
-        if (minersBuilt >= INITIAL_MINER_COUNT) {
-            goal = Goal.BUILD_LANDSCAPERS_AND_MINERS;
+        if (minersBuilt >= INITIAL_MINING_MINERS + INITIAL_ATTACKING_MINERS) {
+            goal = Goal.IDLE;
         }
     }
 
@@ -68,7 +74,7 @@ public class HQ extends Robot {
             minersBuilt += 1;
             robotBuiltMessage = new RobotBuiltMessage(new RobotType[]{RobotType.DESIGN_SCHOOL}, Goal.BUILD_LANDSCAPERS_AND_MINERS, builtAt, RobotType.MINER);
 
-            if (minersBuilt >= Constants.LANDSCAPERS_FOR_WALL + Constants.INITIAL_ATTACKING_LANDSCAPERS + INITIAL_MINER_COUNT) {
+            if (minersBuilt >= Constants.LANDSCAPERS_FOR_WALL + Constants.INITIAL_ATTACKING_LANDSCAPERS + INITIAL_MINING_MINERS + INITIAL_ATTACKING_MINERS) {
                 goal = Goal.IDLE;
             }
         } else if (checkRobotBuiltInRound(roundNum - 1, RobotType.LANDSCAPER) != null) {
@@ -79,6 +85,10 @@ public class HQ extends Robot {
     private void writeBlockchain() throws GameActionException {
         if (robotBuiltMessage != null && transactor.submitTransaction(robotBuiltMessage)) {
             robotBuiltMessage = null;
+        }
+
+        if (initialGoalMessage != null && transactor.submitTransaction(initialGoalMessage)) {
+            initialGoalMessage = null;
         }
     }
 

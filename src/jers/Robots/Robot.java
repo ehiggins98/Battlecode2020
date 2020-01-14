@@ -106,26 +106,6 @@ public abstract class Robot {
         return Goal.IDLE;
     }
 
-    ArrayList<MapLocation> checkSoupFoundInRound(int round) throws GameActionException {
-        return checkSoupFoundInRange(round, round + 1);
-    }
-
-    ArrayList<MapLocation> checkSoupFoundInRange(int startRound, int endRound) throws GameActionException {
-        ArrayList<MapLocation> results = new ArrayList<>();
-        for (int round = startRound; round < endRound; round++) {
-            ArrayList<Message> messages = transactor.getBlock(round, goal);
-            for (Message m : messages) {
-                if (m.getMessageType() != MessageType.SOUP_FOUND) {
-                    continue;
-                }
-
-                results.add(((SoupFoundMessage) m).getLocation());
-            }
-        }
-
-        return results;
-    }
-
     /**
      * Get an open tile adjacent to the given tile, starting from the ideal direction and proceeding outward through the
      * given valid directions.
