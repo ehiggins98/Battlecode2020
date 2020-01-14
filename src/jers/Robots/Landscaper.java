@@ -86,6 +86,7 @@ public class Landscaper extends Robot {
                         if (initialGoalMessage.getRoundCreated() == createdOnRound &&
                                 initialGoalMessage.getInitialLocation().equals(rc.getLocation())) {
                             initialGoal = initialGoalMessage.getInitialGoal();
+                            System.out.println(initialGoal);
                         }
                         break;
                 }
@@ -107,7 +108,7 @@ public class Landscaper extends Robot {
     // cardinal directions and build 2 tiles of the wall.
     private void goToMyHQ() throws GameActionException {
         if (pathFinder.getGoal() == null || pathFinder.isFailed()) {
-            pathFinder.setGoal(getOpenTileAdjacent(myHQ, myHQ.directionTo(rc.getLocation()), Constants.cardinalDirections, false));
+            pathFinder.setGoal(getOpenTileAdjacent(myHQ, myHQ.directionTo(rc.getLocation()).opposite(), Constants.directions, false));
         } else if (pathFinder.isFinished()) {
             goal = Goal.BUILD_HQ_WALL;
         }
@@ -119,22 +120,13 @@ public class Landscaper extends Robot {
 
     // Build the wall. Each landscaper handles 2 tiles.
     private void buildHQWall() throws GameActionException {
-        RobotInfo occupier = rc.senseRobotAtLocation(rc.getLocation().add(depositDirection));
-        if (rc.canDepositDirt(depositDirection) && rc.getDirtCarrying() > 0 &&
-                (occupier == null || occupier.getType() != RobotType.LANDSCAPER || depositDirection == Direction.CENTER)) {
+        if (rc.canDepositDirt(Direction.CENTER) && rc.getDirtCarrying() > 0) {
             rc.depositDirt(depositDirection);
-
-            if (depositDirection == Direction.CENTER) {
-                depositDirection = rc.getLocation().directionTo(myHQ).rotateLeft().rotateLeft();
-            } else {
-                depositDirection = Direction.CENTER;
+        } else {
+            Direction digDirection = getDigDirection();
+            if (digDirection != null && rc.canDigDirt(digDirection)) {
+                rc.digDirt(digDirection);
             }
-            return;
-        }
-
-        Direction digDirection = getDigDirection();
-        if (digDirection != null && rc.canDigDirt(digDirection)) {
-            rc.digDirt(digDirection);
         }
     }
 
@@ -165,6 +157,7 @@ public class Landscaper extends Robot {
                     theirHQ = ((HqFoundMessage) m).getLocation();
                     break;
                 case INITIAL_GOAL:
+                    System.out.println("Got initial goal message 2");
                     InitialGoalMessage initialGoalMessage = (InitialGoalMessage) m;
                     if (initialGoalMessage.getRoundCreated() == createdOnRound &&
                             initialGoalMessage.getInitialLocation().equals(rc.getLocation())) {

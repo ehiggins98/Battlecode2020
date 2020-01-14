@@ -10,8 +10,7 @@ import jers.Transactor;
 import java.util.*;
 
 import static battlecode.common.RobotType.*;
-import static jers.Constants.INITIAL_ATTACKING_LANDSCAPERS;
-import static jers.Constants.LANDSCAPERS_FOR_WALL;
+import static jers.Constants.*;
 
 public class Miner extends Robot {
     private PathFinder pathFinder;
@@ -20,13 +19,13 @@ public class Miner extends Robot {
     private List<MapLocation> soupLocations;
     private HashSet<MapLocation> sharedSoupLocations;
     private Random random;
-    private int landscapersBuilt;
     private int startupLastRoundChecked = 0;
     private Goal initialGoal;
     private MapLocation theirHQ;
     private MapLocation[] theirHQPossibilities;
     private int hqTry;
     private Queue<Message> messageQueue;
+    private int dronesBuilt = 0;
 
     public Miner(RobotController rc) throws GameActionException {
         super(rc);
@@ -50,9 +49,6 @@ public class Miner extends Robot {
      */
     @Override
     public void run(int roundNum) throws GameActionException, IllegalStateException {
-        if (rc.getID() == 11976) {
-            System.out.println(goal);
-        }
         if (goal == Goal.STARTUP) {
             startUp(roundNum);
             if (Clock.getBytecodesLeft() < 600 || goal == Goal.STARTUP) {
@@ -63,10 +59,13 @@ public class Miner extends Robot {
         Goal lastGoal = null;
         readBlockchain(roundNum);
 
-        if (!hasBuiltUnit(DESIGN_SCHOOL) && (hasBuiltUnit(NET_GUN) || rc.getTeamSoup() - DESIGN_SCHOOL.cost >= NET_GUN.cost)) {
-            goal = Goal.BUILD_DESIGN_SCHOOL;
-        } else if (!hasBuiltUnit(FULFILLMENT_CENTER) && (hasBuiltUnit(NET_GUN) || rc.getTeamSoup() - FULFILLMENT_CENTER.cost >= NET_GUN.cost)) {
+        if (initialGoal != Goal.FIND_ENEMY_HQ && !hasBuiltUnit(FULFILLMENT_CENTER) &&
+                (hasBuiltUnit(NET_GUN) || rc.getTeamSoup() - FULFILLMENT_CENTER.cost >= NET_GUN.cost)) {
             goal = Goal.BUILD_FULFILLMENT_CENTER;
+        } else if (initialGoal != Goal.FIND_ENEMY_HQ &&
+                !hasBuiltUnit(DESIGN_SCHOOL) && (hasBuiltUnit(NET_GUN) || rc.getTeamSoup() - DESIGN_SCHOOL.cost >= NET_GUN.cost) &&
+                dronesBuilt >= INITIAL_DEFENDING_DRONES) {
+            goal = Goal.BUILD_DESIGN_SCHOOL;
         }
 
         while (rc.isReady() && lastGoal != goal) {
@@ -131,8 +130,8 @@ public class Miner extends Robot {
                             case NET_GUN:
                                 buildings.add(new RobotInfo(-1, rc.getTeam(), robotBuiltMessage.getRobotType(), robotBuiltMessage.getRobotLocation()));
                                 break;
-                            case LANDSCAPER:
-                                landscapersBuilt++;
+                            case DELIVERY_DRONE:
+                                dronesBuilt++;
                                 break;
                             case HQ:
                                 myHQ = robotBuiltMessage.getRobotLocation();
@@ -166,9 +165,6 @@ public class Miner extends Robot {
         }
 
         if (!soupLocations.isEmpty()) {
-            if (rc.getID() == 11976) {
-                System.out.println("Setting mining goal");
-            }
             goal = setMiningGoal();
         } else {
             goal = Goal.EXPLORE;
@@ -181,23 +177,14 @@ public class Miner extends Robot {
 
         if (rc.getSoupCarrying() >= RobotType.MINER.soupLimit && rc.isReady()) {
             goal = Goal.REFINE;
-            if (rc.getID() == 11976) {
-                System.out.println("Refining");
-            }
         } else {
             if (rc.canSenseLocation(soupLocations.get(0)) && rc.senseSoup(soupLocations.get(0)) == 0) {
                 goal = Goal.FIND_NEW_SOUP;
-                if (rc.getID() == 11976) {
-                    System.out.println("Finding new soup " + soupLocations.size());
-                }
                 soupLocations.remove(0);
             }
 
             if (soupLocations.isEmpty()) {
                 goal = Goal.EXPLORE;
-                if (rc.getID() == 11976) {
-                    System.out.println("Exploring");
-                }
             } else if ((rc.getLocation().equals(soupLocations.get(0)) || rc.getLocation().isAdjacentTo(soupLocations.get(0)))
                     && rc.canMineSoup(rc.getLocation().directionTo(soupLocations.get(0)))) {
                 if (!sharedSoupLocations.contains(soupLocations.get(0)) && farFromAllSharedSoup(soupLocations.get(0))) {
@@ -208,9 +195,6 @@ public class Miner extends Robot {
                 rc.mineSoup(rc.getLocation().directionTo(soupLocations.get(0)));
             } else if (pathFinder.isFinished()) {
                 goal = Goal.FIND_NEW_SOUP;
-                if (rc.getID() == 11976) {
-                    System.out.println("Finding new soup 2");
-                }
             }
         }
     }
@@ -338,9 +322,8 @@ public class Miner extends Robot {
                         case NET_GUN:
                             buildings.add(new RobotInfo(-1, rc.getTeam(), message.getRobotType(), message.getRobotLocation()));
                             break;
-                        case LANDSCAPER:
-                            landscapersBuilt++;
-                            break;
+                        case DELIVERY_DRONE:
+                            dronesBuilt++;
                     }
                     break;
                 case SOUP_FOUND:
@@ -383,7 +366,7 @@ public class Miner extends Robot {
             MapLocation buildAt = rc.getLocation().add(d);
             if (rc.canBuildRobot(type, d) && !rc.senseFlooding(buildAt) && rc.senseSoup(buildAt) == 0 && buildAt.distanceSquaredTo(myHQ) >= 9) {
                 rc.buildRobot(type, d);
-                messageQueue.add(new RobotBuiltMessage(new RobotType[]{MINER}, Goal.ALL, buildAt, type));
+                messageQueue.add(new RobotBuiltMessage(new RobotType[]{MINER, FULFILLMENT_CENTER, DESIGN_SCHOOL}, Goal.ALL, buildAt, type));
                 goal = nextGoal;
             }
         }
@@ -428,14 +411,8 @@ public class Miner extends Robot {
         while (!soupLocations.isEmpty() && rc.canSenseLocation(soupLocations.get(0)) && rc.senseSoup(soupLocations.get(0)) == 0) {
             soupLocations.remove(0);
         }
-        if (rc.getID() == 11976) {
-            System.out.println("Exited while loop " + soupLocations.isEmpty() + " " + soupLocations.get(0));
-        }
 
         if (soupLocations.isEmpty()) {
-            if (rc.getID() == 11876) {
-                System.out.println("setMiningGoal returned " + Goal.FIND_NEW_SOUP);
-            }
             return Goal.FIND_NEW_SOUP;
         } else if (rc.canSenseLocation(soupLocations.get(0)) &&
                 (!rc.isLocationOccupied(soupLocations.get(0)) || soupLocations.get(0).equals(rc.getLocation())) ||
@@ -445,9 +422,6 @@ public class Miner extends Robot {
             pathFinder.setGoal(getOpenTileAdjacent(soupLocations.get(0), soupLocations.get(0).directionTo(rc.getLocation()), Constants.directions, true));
         }
 
-        if (rc.getID() == 11976) {
-            System.out.println("setMiningGoal returned " + Goal.MINE + " with goal " + pathFinder.getGoal() + " from loc " + rc.getLocation());
-        }
         return Goal.MINE;
     }
 
@@ -473,7 +447,7 @@ public class Miner extends Robot {
                 closest = building.getLocation();
             }
         }
-
+/*
         if (rc.getLocation().distanceSquaredTo(closest) > Constants.FAR_THRESHOLD_RADIUS_SQUARED &&
                 landscapersBuilt >= INITIAL_ATTACKING_LANDSCAPERS + LANDSCAPERS_FOR_WALL) {
             if (rc.getTeamSoup() < REFINERY.cost) {
@@ -481,7 +455,7 @@ public class Miner extends Robot {
             } else {
                 goal = Goal.BUILD_REFINERY;
             }
-        }
+        }*/
 
         return closest;
     }

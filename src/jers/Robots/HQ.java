@@ -74,7 +74,7 @@ public class HQ extends Robot {
             minersBuilt += 1;
             robotBuiltMessage = new RobotBuiltMessage(new RobotType[]{RobotType.DESIGN_SCHOOL}, Goal.BUILD_LANDSCAPERS_AND_MINERS, builtAt, RobotType.MINER);
 
-            if (minersBuilt >= Constants.LANDSCAPERS_FOR_WALL + Constants.INITIAL_ATTACKING_LANDSCAPERS + INITIAL_MINING_MINERS + INITIAL_ATTACKING_MINERS) {
+            if (minersBuilt >= INITIAL_MINING_MINERS + INITIAL_ATTACKING_MINERS) {
                 goal = Goal.IDLE;
             }
         } else if (checkRobotBuiltInRound(roundNum - 1, RobotType.LANDSCAPER) != null) {

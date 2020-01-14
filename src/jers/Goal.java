@@ -25,7 +25,8 @@ public enum Goal {
     BUILD_NET_GUN(23), // Miner
     FIND_NEW_SOUP(24), // Miner
     BUILD_DESIGN_SCHOOL(25), // Miner
-    BUILD_FULFILLMENT_CENTER(26), //Miner
+    BUILD_FULFILLMENT_CENTER(26), // Miner
+    BUILD_INITIAL_LANDSCAPERS(27), // Design School
     ALL(27);
 
     private final int id;

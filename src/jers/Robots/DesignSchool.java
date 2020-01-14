@@ -1,9 +1,7 @@
 package jers.Robots;
 
-import battlecode.common.GameActionException;
-import battlecode.common.MapLocation;
-import battlecode.common.RobotController;
-import battlecode.common.RobotType;
+import battlecode.common.*;
+import jers.Constants;
 import jers.Goal;
 import jers.Messages.InitialGoalMessage;
 import jers.Messages.Message;
@@ -11,27 +9,27 @@ import jers.Messages.MessageType;
 import jers.Messages.RobotBuiltMessage;
 
 import java.util.ArrayList;
-
-import static jers.Constants.INITIAL_ATTACKING_LANDSCAPERS;
-import static jers.Constants.LANDSCAPERS_FOR_WALL;
+import java.util.LinkedList;
+import java.util.Queue;
 
 public class DesignSchool extends Robot {
 
     private int landscapersBuilt;
     private boolean buildLandscaper;
-    private InitialGoalMessage initialGoalMessage;
-    private RobotBuiltMessage robotBuiltMessage;
+    private Queue<Message> messageQueue;
     private RobotType otherUnit;
     private boolean refineryNeeded = false;
-    private int turnsWithSoup = 0;
+    private boolean netGunBuilt = false;
+    int startupLastRoundChecked = 0;
 
     public DesignSchool(RobotController rc) throws GameActionException {
         super(rc);
         landscapersBuilt = 0;
         buildLandscaper = true;
-        goal = Goal.BUILD_LANDSCAPERS_AND_MINERS;
+        goal = Goal.STARTUP;
         myHQ = checkRobotBuiltInRange(1, 20, RobotType.HQ);
         otherUnit = RobotType.MINER;
+        messageQueue = new LinkedList<>();
     }
 
     /**
@@ -41,66 +39,65 @@ public class DesignSchool extends Robot {
      * @throws GameActionException
      */
     @Override
-    public void run(int roundNum) throws GameActionException {
-        /*readBlockchain(roundNum);
-
-        if (rc.getTeamSoup() >= RobotType.REFINERY.cost) {
-            turnsWithSoup++;
+    public void run(final int roundNum) throws GameActionException {
+        if (goal == Goal.STARTUP) {
+            startUp(roundNum);
+            if (goal == Goal.STARTUP) {
+                return;
+            }
         }
 
-        if (turnsWithSoup >= 2) {
-            refineryNeeded = false;
-            turnsWithSoup = 0;
-        } else if (refineryNeeded) {
-            if (checkRobotBuiltInRound(roundNum - 1, otherUnit) != null) {
-                buildLandscaper = true;
-            }
+        readBlockchain(roundNum);
+
+        switch (goal) {
+            case IDLE:
+                break;
+            case BUILD_INITIAL_LANDSCAPERS:
+                buildInitialLandscapers(roundNum);
+                break;
+            default:
+                throw new IllegalStateException("Invalid goal for design school " + goal);
+        }
+
+        writeBlockchain();
+    }
+
+    private void startUp(final int roundNum) throws GameActionException {
+        if (startupLastRoundChecked >= roundNum - 2) {
+            goal = Goal.BUILD_INITIAL_LANDSCAPERS;
             return;
         }
 
-        if (landscapersBuilt == INITIAL_ATTACKING_LANDSCAPERS + LANDSCAPERS_FOR_WALL) {
-            otherUnit = RobotType.DELIVERY_DRONE;
+        while (startupLastRoundChecked < roundNum - 1 && Clock.getBytecodesLeft() > 600) {
+            ArrayList<Message> messages = transactor.getBlock(++startupLastRoundChecked, goal);
+            for (Message m : messages) {
+                switch (m.getMessageType()) {
+                    case ROBOT_BUILT:
+                        RobotBuiltMessage robotBuiltMessage = (RobotBuiltMessage) m;
+                        if (robotBuiltMessage.getRobotType() == RobotType.NET_GUN) {
+                            netGunBuilt = true;
+                        }
+                        break;
+                }
+            }
         }
-
-        buildLandscapersAndOtherUnit(otherUnit, roundNum);*/
     }
 
-    private void buildLandscapersAndOtherUnit(RobotType otherUnit, int roundNum) throws GameActionException {
-        if (buildLandscaper) {
+    private void buildInitialLandscapers(final int roundNum) throws GameActionException {
+        if (netGunBuilt || rc.getTeamSoup() - RobotType.LANDSCAPER.cost >= RobotType.NET_GUN.cost) {
             MapLocation builtAt = makeRobot(RobotType.LANDSCAPER);
             if (builtAt == null) {
                 return;
             }
-
-            Goal initialGoal;
-            if (landscapersBuilt < INITIAL_ATTACKING_LANDSCAPERS) {
-                initialGoal = Goal.FIND_ENEMY_HQ;
-            } else if (landscapersBuilt < INITIAL_ATTACKING_LANDSCAPERS + LANDSCAPERS_FOR_WALL) {
-                initialGoal = Goal.GO_TO_MY_HQ;
-            } else {
-                initialGoal = Goal.FIND_ENEMY_HQ;
-            }
-
-            buildLandscaper = false;
-            landscapersBuilt += 1;
-            initialGoalMessage = new InitialGoalMessage(new RobotType[]{RobotType.LANDSCAPER},
-                    Goal.ALL, builtAt, roundNum, initialGoal);
-            robotBuiltMessage = new RobotBuiltMessage(new RobotType[]{RobotType.HQ, RobotType.MINER, RobotType.FULFILLMENT_CENTER},
-                    Goal.ALL, builtAt, RobotType.LANDSCAPER);
-
-            if (landscapersBuilt >= INITIAL_ATTACKING_LANDSCAPERS + LANDSCAPERS_FOR_WALL) {
-                goal = Goal.BUILD_LANDSCAPERS_AND_DRONES;
-            }
-        } else if (checkRobotBuiltInRound(roundNum - 1, otherUnit) != null) {
-            buildLandscaper = true;
+            System.out.println("Built landscaper");
+            landscapersBuilt++;
+            messageQueue.add(new InitialGoalMessage(new RobotType[]{RobotType.LANDSCAPER},
+                    Goal.ALL, builtAt, roundNum, Goal.GO_TO_MY_HQ));
+            messageQueue.add(new RobotBuiltMessage(new RobotType[]{RobotType.MINER}, Goal.ALL, builtAt, RobotType.LANDSCAPER));
         }
 
-        if (initialGoalMessage != null && transactor.submitTransaction(initialGoalMessage)) {
-            initialGoalMessage = null;
-        }
-
-        if (robotBuiltMessage != null && transactor.submitTransaction(robotBuiltMessage)) {
-            robotBuiltMessage = null;
+        if (landscapersBuilt >= Constants.LANDSCAPERS_FOR_WALL) {
+            goal = Goal.IDLE;
         }
     }
 
@@ -111,6 +108,12 @@ public class DesignSchool extends Robot {
                 refineryNeeded = true;
                 break;
             }
+        }
+    }
+
+    private void writeBlockchain() throws GameActionException {
+        if (!messageQueue.isEmpty() && transactor.submitTransaction(messageQueue.peek())) {
+            messageQueue.poll();
         }
     }
 }
