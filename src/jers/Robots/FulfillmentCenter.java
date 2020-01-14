@@ -34,7 +34,7 @@ public class FulfillmentCenter extends Robot {
 
     @Override
     public void run(int roundNum) throws GameActionException {
-        readBlockchain(roundNum);
+        /*readBlockchain(roundNum);
 
         if (rc.getTeamSoup() >= RobotType.REFINERY.cost) {
             roundsWithSoup++;
@@ -61,7 +61,7 @@ public class FulfillmentCenter extends Robot {
                 break;
             default:
                 throw new IllegalStateException("Invalid goal for Fulfillment Center: " + goal);
-        }
+        }*/
     }
     /**
      * Build 4 drones that will go harass enemy, then wait until second wave starts

@@ -4,7 +4,6 @@ import battlecode.common.GameActionException;
 import battlecode.common.MapLocation;
 import battlecode.common.RobotController;
 import battlecode.common.RobotType;
-import jers.Constants;
 import jers.Goal;
 import jers.Messages.InitialGoalMessage;
 import jers.Messages.Message;
@@ -43,7 +42,7 @@ public class DesignSchool extends Robot {
      */
     @Override
     public void run(int roundNum) throws GameActionException {
-        readBlockchain(roundNum);
+        /*readBlockchain(roundNum);
 
         if (rc.getTeamSoup() >= RobotType.REFINERY.cost) {
             turnsWithSoup++;
@@ -63,7 +62,7 @@ public class DesignSchool extends Robot {
             otherUnit = RobotType.DELIVERY_DRONE;
         }
 
-        buildLandscapersAndOtherUnit(otherUnit, roundNum);
+        buildLandscapersAndOtherUnit(otherUnit, roundNum);*/
     }
 
     private void buildLandscapersAndOtherUnit(RobotType otherUnit, int roundNum) throws GameActionException {
