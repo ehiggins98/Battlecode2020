@@ -238,7 +238,7 @@ public class DeliveryDrone extends Robot {
             pathFinder.move(false, true, myHQ);
             if (pathFinder.isFinished()) {
                 if (pickedUpUnits.contains(target_id) || !rc.canPickUpUnit(target_id)) {
-                    goal = Goal.GO_TO_ENEMY_HQ;
+                    goal = Goal.ROAM_AROUND;
                     return;
                 }
                 rc.pickUpUnit(target_id);
@@ -289,7 +289,7 @@ public class DeliveryDrone extends Robot {
         MapLocation loc = rc.getLocation();
         for (Direction dir: Direction.values()) {
             MapLocation newLoc = loc.add(dir);
-            if (rc.senseFlooding(newLoc) && !rc.isLocationOccupied(newLoc)) {
+            if (rc.canSenseLocation(newLoc) && rc.senseFlooding(newLoc) && !rc.isLocationOccupied(newLoc)) {
                 return dir;
             }
         }

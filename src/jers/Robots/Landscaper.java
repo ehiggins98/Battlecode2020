@@ -86,7 +86,6 @@ public class Landscaper extends Robot {
                         if (initialGoalMessage.getRoundCreated() == createdOnRound &&
                                 initialGoalMessage.getInitialLocation().equals(rc.getLocation())) {
                             initialGoal = initialGoalMessage.getInitialGoal();
-                            System.out.println(initialGoal);
                         }
                         break;
                 }
@@ -157,7 +156,6 @@ public class Landscaper extends Robot {
                     theirHQ = ((HqFoundMessage) m).getLocation();
                     break;
                 case INITIAL_GOAL:
-                    System.out.println("Got initial goal message 2");
                     InitialGoalMessage initialGoalMessage = (InitialGoalMessage) m;
                     if (initialGoalMessage.getRoundCreated() == createdOnRound &&
                             initialGoalMessage.getInitialLocation().equals(rc.getLocation())) {

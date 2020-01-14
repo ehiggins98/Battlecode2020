@@ -89,7 +89,7 @@ public class DesignSchool extends Robot {
             if (builtAt == null) {
                 return;
             }
-            System.out.println("Built landscaper");
+
             landscapersBuilt++;
             messageQueue.add(new InitialGoalMessage(new RobotType[]{RobotType.LANDSCAPER},
                     Goal.ALL, builtAt, roundNum, Goal.GO_TO_MY_HQ));

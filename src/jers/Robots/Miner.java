@@ -59,11 +59,11 @@ public class Miner extends Robot {
         Goal lastGoal = null;
         readBlockchain(roundNum);
 
-        if (initialGoal != Goal.FIND_ENEMY_HQ && !hasBuiltUnit(FULFILLMENT_CENTER) &&
+        if (initialGoal != Goal.FIND_ENEMY_HQ && !hasBuiltUnit(FULFILLMENT_CENTER) && rc.getTeamSoup() >= FULFILLMENT_CENTER.cost &&
                 (hasBuiltUnit(NET_GUN) || rc.getTeamSoup() - FULFILLMENT_CENTER.cost >= NET_GUN.cost)) {
             goal = Goal.BUILD_FULFILLMENT_CENTER;
-        } else if (initialGoal != Goal.FIND_ENEMY_HQ &&
-                !hasBuiltUnit(DESIGN_SCHOOL) && (hasBuiltUnit(NET_GUN) || rc.getTeamSoup() - DESIGN_SCHOOL.cost >= NET_GUN.cost) &&
+        } else if (initialGoal != Goal.FIND_ENEMY_HQ && !hasBuiltUnit(DESIGN_SCHOOL) && rc.getTeamSoup() >= DESIGN_SCHOOL.cost &&
+                (hasBuiltUnit(NET_GUN) || rc.getTeamSoup() - DESIGN_SCHOOL.cost >= NET_GUN.cost) &&
                 dronesBuilt >= INITIAL_DEFENDING_DRONES) {
             goal = Goal.BUILD_DESIGN_SCHOOL;
         }

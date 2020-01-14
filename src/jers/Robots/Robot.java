@@ -119,7 +119,7 @@ public abstract class Robot {
         Direction rotLeft = ideal;
         Direction rotRight = ideal;
 
-        while (rotLeft != rotRight || rotLeft == ideal) {
+        for (int i = 0; i < 5; i++) {
             MapLocation rotLeftLoc = center.add(rotLeft);
             MapLocation rotRightLoc = center.add(rotRight);
 
